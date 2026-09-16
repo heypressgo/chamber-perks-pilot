@@ -875,6 +875,69 @@
     .notch{display:none;}
     .caption-row{display:none;}
   }
+
+  /* ---------- desktop app shell (sidebar nav, wide content) ---------- */
+  @media (min-width:900px){
+    .stage{display:block; max-width:none; padding:0; gap:0; min-height:100vh;}
+    .intro{display:none;}
+    .caption-row{display:none;}
+    .phone-wrap{display:block; gap:0; min-height:100vh;}
+    .phone{width:100%; max-width:none; border-radius:0; padding:0; box-shadow:none; background:none;}
+    .screen{height:100vh; max-height:none; border-radius:0;}
+    .statusbar, .notch{display:none;}
+
+    .app-shell{
+      display:grid;
+      grid-template-columns:248px 1fr;
+      grid-template-rows:auto 1fr;
+      grid-template-areas:"appbar appbar" "tabbar content";
+      height:100%;
+    }
+    .appbar{grid-area:appbar; padding:16px 32px;}
+    .content{
+      grid-area:content; min-height:0;
+      padding:30px 40px 48px; max-width:1160px; margin:0 auto; width:100%;
+    }
+    .tabbar{
+      grid-area:tabbar;
+      flex-direction:column;
+      align-items:stretch;
+      justify-content:flex-start;
+      gap:2px;
+      padding:20px 14px;
+      border-top:none;
+      border-right:1px solid var(--line);
+      background:var(--paper-raised);
+    }
+    .app-shell:has(.tabbar[hidden]) .content{grid-column:1 / -1;}
+    .tabbar button{
+      flex-direction:row;
+      justify-content:flex-start;
+      gap:11px;
+      padding:10px 14px;
+      border-radius:10px;
+      font-size:13.5px;
+    }
+    .tabbar button svg{width:18px; height:18px;}
+    .tabbar .dot{display:none;}
+    .tabbar button[aria-selected="true"]{background:var(--brass-fill); color:var(--ink);}
+
+    .stat-grid{grid-template-columns:repeat(4,1fr);}
+
+    .row-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:12px;}
+    .row-list .biz-row{
+      border:1px solid var(--line); border-radius:14px;
+      padding:14px; background:var(--paper-raised); margin:0;
+    }
+    .row-list .offer{margin-bottom:0;}
+
+    .sheet-veil{align-items:center; justify-content:center; padding:24px;}
+    .sheet{
+      width:440px; max-width:100%; border-radius:20px;
+      max-height:85vh; overflow-y:auto;
+      box-shadow:0 30px 60px -20px var(--shadow);
+    }
+  }
 </style>
 
 <div class="stage">
@@ -1223,7 +1286,7 @@
         '<input id="dir-search" type="text" placeholder="Search members, category, suburb" value="'+esc(query)+'">'+
       '</div>'+
       '<div class="section-label">'+list.length+' members</div>'+
-      rows;
+      '<div class="row-list">'+rows+'</div>';
 
     var input = document.getElementById("dir-search");
     input.focus();
@@ -1285,7 +1348,7 @@
       '</div>';
     }).join("");
 
-    contentEl.innerHTML = '<h2 class="screen-title">Live offers</h2>' + rows;
+    contentEl.innerHTML = '<h2 class="screen-title">Live offers</h2><div class="row-list">' + rows + '</div>';
 
     contentEl.querySelectorAll("[data-redeem]").forEach(function(btn){
       btn.addEventListener("click", function(){ openRedeemSheet(btn.getAttribute("data-redeem")); });
