@@ -1025,7 +1025,10 @@
     var res = await sb.from("members").select("*, offers(*)").order("business_name");
     if(res.error){ console.error("loadBusinesses", res.error); return; }
     BUSINESSES = res.data.map(function(m){
-      var o = (m.offers && m.offers[0]) || {};
+      // PostgREST returns this embed as a single object (offers.member_id is
+      // unique, so it's a to-one relation) — stay defensive in case that
+      // ever changes.
+      var o = Array.isArray(m.offers) ? (m.offers[0] || {}) : (m.offers || {});
       return {
         id: m.id, name: m.business_name, cat: m.category, suburb: m.suburb,
         initial: m.business_name.charAt(0), address: m.address, phone: m.phone,
@@ -1717,6 +1720,7 @@
       '<div class="field"><label for="f-name">Business name</label><input id="f-name" type="text" value="'+esc(p.name)+'"></div>'+
       '<div class="field"><label for="f-suburb">Suburb</label><input id="f-suburb" type="text" value="'+esc(p.suburb)+'"></div>'+
       '<div class="field"><label for="f-bio">Bio</label><textarea id="f-bio">'+esc(p.bio||"")+'</textarea></div>'+
+      '<div class="field-error" id="profile-error" hidden>Couldn&rsquo;t save &mdash; check your connection and try again.</div>'+
       '<div class="sheet-actions">'+
         '<button class="btn btn-primary" id="save-profile">Save</button>'+
         '<button class="btn btn-ghost" data-close-sheet>Cancel</button>'+
@@ -1724,13 +1728,15 @@
     );
     veil.querySelector("#save-profile").addEventListener("click", async function(){
       var btn = veil.querySelector("#save-profile");
+      var errEl = veil.querySelector("#profile-error");
+      errEl.hidden = true;
       btn.disabled = true;
       var res = await sb.from("members").update({
         business_name: veil.querySelector("#f-name").value.trim() || p.name,
         suburb: veil.querySelector("#f-suburb").value.trim() || p.suburb,
         bio: veil.querySelector("#f-bio").value.trim()
       }).eq("id", CURRENT_MEMBER_ID);
-      if(res.error){ console.error("save profile", res.error); btn.disabled = false; return; }
+      if(res.error){ console.error("save profile", res.error); errEl.hidden = false; btn.disabled = false; return; }
       await loadBusinesses();
       veil.remove();
       if(RENDER[state.tab]) RENDER[state.tab]();
@@ -1756,6 +1762,7 @@
         '<div class="field"><label for="f-season-start">From</label><input type="date" id="f-season-start" value="'+esc(biz.seasonStart||"")+'"></div>'+
         '<div class="field"><label for="f-season-end">To</label><input type="date" id="f-season-end" value="'+esc(biz.seasonEnd||"")+'"></div>'+
       '</div>'+
+      '<div class="field-error" id="promo-error" hidden>Couldn&rsquo;t save &mdash; check your connection and try again.</div>'+
       '<div class="sheet-actions">'+
         '<button class="btn btn-primary" id="save-promo">Save</button>'+
         '<button class="btn btn-ghost" data-close-sheet>Cancel</button>'+
@@ -1770,6 +1777,9 @@
 
     veil.querySelector("#save-promo").addEventListener("click", async function(){
       var btn = veil.querySelector("#save-promo");
+      var errEl = veil.querySelector("#promo-error");
+      errEl.hidden = true;
+      if(!biz.offerId){ errEl.textContent = "No offer record found for this business — nothing to update."; errEl.hidden = false; return; }
       btn.disabled = true;
       var availability = availSelect.value;
       var seasonStart = veil.querySelector("#f-season-start").value;
@@ -1781,7 +1791,7 @@
         season_start: availability === "seasonal" && seasonStart ? seasonStart : null,
         season_end: availability === "seasonal" && seasonEnd ? seasonEnd : null
       }).eq("id", biz.offerId);
-      if(res.error){ console.error("save promo", res.error); btn.disabled = false; return; }
+      if(res.error){ console.error("save promo", res.error); errEl.hidden = false; btn.disabled = false; return; }
       await loadBusinesses();
       veil.remove();
       if(RENDER[state.tab]) RENDER[state.tab]();
