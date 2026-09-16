@@ -305,6 +305,12 @@
   .tabbar .dot{
     width:4px; height:4px; border-radius:50%; background:#00809D; opacity:0; margin-top:-1px;
   }
+  .tab-icon-wrap{position:relative; display:inline-flex;}
+  .tab-badge{
+    position:absolute; top:-4px; right:-7px; min-width:14px; height:14px; padding:0 3px;
+    border-radius:999px; background:var(--confirm); color:#fff; font-size:9px; font-weight:700;
+    line-height:14px; text-align:center; font-family:"JetBrains Mono", monospace;
+  }
 
   h2.screen-title{
     font-family:"Fraunces", Georgia, serif;
@@ -702,6 +708,7 @@
     cursor:pointer;
   }
   .rsvp[aria-pressed="true"]{background:var(--confirm-fill); color:var(--confirm); border-color:transparent;}
+  .rsvp[data-declined="true"]{background:var(--line-soft); color:var(--ink-faint); border-color:transparent;}
 
   .event-row{cursor:pointer;}
 
@@ -1019,7 +1026,10 @@
               Offers<span class="dot"></span>
             </button>
             <button data-tab="events" aria-selected="false">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2.2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+              <span class="tab-icon-wrap">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2.2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+                <span class="tab-badge" id="events-badge" hidden>0</span>
+              </span>
               Events<span class="dot"></span>
             </button>
             <button data-tab="requests" aria-selected="false">
@@ -1114,25 +1124,41 @@
   async function loadEvents(){
     var evRes = await sb.from("events").select("*").order("starts_at");
     if(evRes.error){ console.error("loadEvents", evRes.error); return; }
-    var rsvpRes = await sb.from("event_rsvps").select("event_id, member_id, party_size");
+    var rsvpRes = await sb.from("event_rsvps").select("event_id, member_id, party_size, status");
     var byEvent = {};
     (rsvpRes.data || []).forEach(function(r){
-      if(!byEvent[r.event_id]) byEvent[r.event_id] = {going:0, mine:0};
-      byEvent[r.event_id].going += r.party_size;
-      if(r.member_id === CURRENT_MEMBER_ID) byEvent[r.event_id].mine = r.party_size;
+      if(!byEvent[r.event_id]) byEvent[r.event_id] = {going:0, mine:0, myStatus:null};
+      if(r.status === "going") byEvent[r.event_id].going += r.party_size;
+      if(r.member_id === CURRENT_MEMBER_ID){
+        byEvent[r.event_id].myStatus = r.status;
+        byEvent[r.event_id].mine = r.status === "going" ? r.party_size : 0;
+      }
     });
     EVENTS = evRes.data.map(function(ev){
       var d = new Date(ev.starts_at);
-      var rsvp = byEvent[ev.id] || {going:0, mine:0};
+      var rsvp = byEvent[ev.id] || {going:0, mine:0, myStatus:null};
       return {
         id: ev.id, name: ev.name, where: ev.location,
         d: String(d.getDate()).length<2 ? "0"+d.getDate() : String(d.getDate()),
         m: d.toLocaleDateString("en-AU",{month:"short"}).toUpperCase(),
-        going: rsvp.going, myParty: rsvp.mine,
+        going: rsvp.going, myParty: rsvp.mine, myStatus: rsvp.myStatus,
+        startsAt: ev.starts_at,
         time: fmtEventTime(ev.starts_at, ev.ends_at), desc: ev.description || "",
         photos: ["#C68A2E","#2F6B78","#17273C","#5FA8B8"]
       };
     });
+    updateEventsBadge();
+  }
+
+  function updateEventsBadge(){
+    var badge = document.getElementById("events-badge");
+    if(!badge) return;
+    var now = new Date();
+    var pending = EVENTS.filter(function(ev){
+      return !ev.myStatus && new Date(ev.startsAt) > now;
+    }).length;
+    badge.textContent = pending;
+    badge.hidden = pending === 0;
   }
 
   async function loadRequests(){
@@ -1366,16 +1392,20 @@
   function renderEvents(){
     if(!EVENTS.length){ contentEl.innerHTML = '<h2 class="screen-title">Chamber events</h2><div class="empty">No events yet</div>'; return; }
     var rows = EVENTS.map(function(ev){
+      var status = ev.myStatus;
       var party = ev.myParty || 0;
-      var pressed = party > 0;
+      var pressed = status === "going";
+      var declined = status === "declined";
+      var btnLabel = pressed ? "Going" : declined ? "Can’t go" : "RSVP";
+      var goingSuffix = pressed ? ' &middot; including you'+(party>1?' (party of '+party+')':'') : "";
       return '<div class="event event-row" data-open-event="'+ev.id+'">'+
         '<div class="event-date"><div class="d">'+ev.d+'</div><div class="m">'+ev.m+'</div></div>'+
         '<div class="event-info">'+
           '<div class="name">'+esc(ev.name)+'</div>'+
           '<div class="where">'+esc(ev.where)+'</div>'+
-          '<div class="going">'+ev.going+' member'+(ev.going===1?'':'s')+' going'+(pressed?' &middot; including you'+(party>1?' (party of '+party+')':''):'')+'</div>'+
+          '<div class="going">'+ev.going+' member'+(ev.going===1?'':'s')+' going'+goingSuffix+'</div>'+
         '</div>'+
-        '<button class="rsvp" data-open-event="'+ev.id+'" aria-pressed="'+pressed+'">'+(pressed?"Going":"RSVP")+'</button>'+
+        '<button class="rsvp" data-open-event="'+ev.id+'" aria-pressed="'+pressed+'" data-declined="'+declined+'">'+btnLabel+'</button>'+
       '</div>';
     }).join("");
 
@@ -1389,29 +1419,37 @@
     });
   }
 
-  function openEventSheet(eventId){
-    var ev = EVENTS.filter(function(x){ return x.id === eventId; })[0];
-    if(!ev) return;
-    var party = ev.myParty || 0;
-    var pressed = party > 0;
-    var going = ev.going;
-
-    var actionsHtml = pressed
-      ? '<p class="event-detail-desc" style="text-align:center;margin-bottom:2px;">You\'re going &mdash; '+PARTY_LABELS[party-1].toLowerCase()+'</p>'+
+  function eventSheetActionsHtml(status, party, going){
+    if(status === "going"){
+      return '<p class="event-detail-desc" style="text-align:center;margin-bottom:2px;">You\'re going &mdash; '+PARTY_LABELS[party-1].toLowerCase()+'</p>'+
         '<div class="sheet-actions">'+
           '<button class="btn btn-ghost" id="cancel-rsvp">Cancel RSVP</button>'+
           '<button class="btn btn-primary" id="close-sheet">Close</button>'+
-        '</div>'
-      : '<div class="rsvp-form">'+
-          '<label for="party-size">Who\'s coming?</label>'+
-          '<select id="party-size">'+
-            PARTY_LABELS.map(function(l,i){ return '<option value="'+(i+1)+'">'+l+'</option>'; }).join("")+
-          '</select>'+
-        '</div>'+
+        '</div>';
+    }
+    if(status === "declined"){
+      return '<p class="event-detail-desc" style="text-align:center;margin-bottom:2px;">You said you can&rsquo;t make this one</p>'+
         '<div class="sheet-actions">'+
-          '<button class="btn btn-primary" id="sheet-rsvp">Register &mdash; '+going+' going</button>'+
+          '<button class="btn btn-primary" id="undo-decline">I can make it after all</button>'+
           '<button class="btn btn-ghost" id="close-sheet">Close</button>'+
         '</div>';
+    }
+    return '<div class="rsvp-form">'+
+        '<label for="party-size">Who\'s coming?</label>'+
+        '<select id="party-size">'+
+          PARTY_LABELS.map(function(l,i){ return '<option value="'+(i+1)+'">'+l+'</option>'; }).join("")+
+        '</select>'+
+      '</div>'+
+      '<div class="sheet-actions">'+
+        '<button class="btn btn-primary" id="sheet-rsvp">Register &mdash; '+going+' going</button>'+
+        '<button class="btn btn-ghost" id="sheet-decline">Unable to attend</button>'+
+      '</div>'+
+      '<button id="close-sheet" style="width:100%;background:none;border:none;color:var(--ink-faint);font-size:12px;font-family:inherit;padding:10px 0 0;cursor:pointer;">Not now</button>';
+  }
+
+  function openEventSheet(eventId){
+    var ev = EVENTS.filter(function(x){ return x.id === eventId; })[0];
+    if(!ev) return;
 
     var veil = document.createElement("div");
     veil.className = "sheet-veil";
@@ -1428,39 +1466,64 @@
           ev.photos.map(function(c){ return '<div class="photo-tile" style="background:'+c+'"></div>'; }).join("")+
         '</div>'+
         '<div class="photo-caption">Sample photos — real event shots go here once live</div>'+
-        actionsHtml+
+        '<div id="event-actions">'+eventSheetActionsHtml(ev.myStatus, ev.myParty, ev.going)+'</div>'+
       '</div>';
     screenEl.appendChild(veil);
 
-    veil.querySelector("#close-sheet").addEventListener("click", function(){ veil.remove(); });
+    function wireActions(){
+      var closeBtn = veil.querySelector("#close-sheet");
+      if(closeBtn) closeBtn.addEventListener("click", function(){ veil.remove(); });
 
-    var rsvpBtn = veil.querySelector("#sheet-rsvp");
-    if(rsvpBtn){
-      rsvpBtn.addEventListener("click", async function(){
-        var size = parseInt(veil.querySelector("#party-size").value, 10);
-        rsvpBtn.disabled = true;
-        var res = await sb.from("event_rsvps").upsert(
-          {event_id: ev.id, member_id: CURRENT_MEMBER_ID, party_size: size},
-          {onConflict: "event_id,member_id"}
-        );
-        if(res.error){ console.error("rsvp upsert", res.error); rsvpBtn.disabled = false; return; }
-        await loadEvents();
-        veil.remove();
-        renderEvents();
-      });
+      var rsvpBtn = veil.querySelector("#sheet-rsvp");
+      if(rsvpBtn){
+        rsvpBtn.addEventListener("click", async function(){
+          var size = parseInt(veil.querySelector("#party-size").value, 10);
+          rsvpBtn.disabled = true;
+          var res = await sb.from("event_rsvps").upsert(
+            {event_id: ev.id, member_id: CURRENT_MEMBER_ID, party_size: size, status: "going"},
+            {onConflict: "event_id,member_id"}
+          );
+          if(res.error){ console.error("rsvp upsert", res.error); rsvpBtn.disabled = false; return; }
+          await loadEvents();
+          veil.remove();
+          renderEvents();
+        });
+      }
+      var declineBtn = veil.querySelector("#sheet-decline");
+      if(declineBtn){
+        declineBtn.addEventListener("click", async function(){
+          declineBtn.disabled = true;
+          var res = await sb.from("event_rsvps").upsert(
+            {event_id: ev.id, member_id: CURRENT_MEMBER_ID, party_size: 1, status: "declined"},
+            {onConflict: "event_id,member_id"}
+          );
+          if(res.error){ console.error("rsvp decline", res.error); declineBtn.disabled = false; return; }
+          await loadEvents();
+          veil.remove();
+          renderEvents();
+        });
+      }
+      var undoBtn = veil.querySelector("#undo-decline");
+      if(undoBtn){
+        undoBtn.addEventListener("click", function(){
+          veil.querySelector("#event-actions").innerHTML = eventSheetActionsHtml(null, 0, ev.going);
+          wireActions();
+        });
+      }
+      var cancelBtn = veil.querySelector("#cancel-rsvp");
+      if(cancelBtn){
+        cancelBtn.addEventListener("click", async function(){
+          cancelBtn.disabled = true;
+          var res = await sb.from("event_rsvps").delete()
+            .eq("event_id", ev.id).eq("member_id", CURRENT_MEMBER_ID);
+          if(res.error){ console.error("rsvp delete", res.error); cancelBtn.disabled = false; return; }
+          await loadEvents();
+          veil.remove();
+          renderEvents();
+        });
+      }
     }
-    var cancelBtn = veil.querySelector("#cancel-rsvp");
-    if(cancelBtn){
-      cancelBtn.addEventListener("click", async function(){
-        cancelBtn.disabled = true;
-        var res = await sb.from("event_rsvps").delete()
-          .eq("event_id", ev.id).eq("member_id", CURRENT_MEMBER_ID);
-        if(res.error){ console.error("rsvp delete", res.error); cancelBtn.disabled = false; return; }
-        await loadEvents();
-        veil.remove();
-        renderEvents();
-      });
-    }
+    wireActions();
   }
 
   function mapSvg(){
