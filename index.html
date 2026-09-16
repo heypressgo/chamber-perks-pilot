@@ -874,6 +874,11 @@
     .screen{height:100dvh; max-height:none; border-radius:0;}
     .notch{display:none;}
     .caption-row{display:none;}
+    /* fake status bar was only there to sell the desktop mockup —
+       a real phone already has its own clock/wifi/battery */
+    .statusbar{display:none;}
+    .appbar{padding-top:calc(6px + env(safe-area-inset-top,0px));}
+    .login-hero{padding-top:calc(34px + env(safe-area-inset-top,0px));}
   }
 
   /* ---------- desktop app shell (sidebar nav, wide content) ---------- */
