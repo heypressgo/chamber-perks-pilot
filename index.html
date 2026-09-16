@@ -1,0 +1,2115 @@
+<!doctype html>
+<title>Chamber Perks</title>
+<meta name="description" content="A working prototype of a member-perks app for local chambers of commerce, with a live redemption flow and staff dashboard.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    /* Pittwater Business palette — headland navy, water teal, sun gold */
+    --paper:#F6F5F0;
+    --paper-raised:#FFFFFF;
+    --ink:#17273C;
+    --ink-soft:#55677C;
+    --ink-faint:#8B97A6;
+    --stamp:#C68A2E;
+    --stamp-ink:#A06B21;
+    --brass:#C68A2E;
+    --brass-fill:#F1E2C4;
+    --confirm:#2F6B78;
+    --confirm-fill:#DCEBEA;
+    --line:rgba(23,39,60,0.14);
+    --line-soft:rgba(23,39,60,0.08);
+    --shadow:rgba(23,39,60,0.22);
+    --bezel:#0F1C2C;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#0D1622;
+      --paper-raised:#16222F;
+      --ink:#ECEEE7;
+      --ink-soft:#A8B3C0;
+      --ink-faint:#6E7C8C;
+      --stamp:#F6A622;
+      --stamp-ink:#F0C077;
+      --brass:#F6A622;
+      --brass-fill:#3A2D14;
+      --confirm:#5FA8B8;
+      --confirm-fill:#16333A;
+      --line:rgba(236,238,231,0.16);
+      --line-soft:rgba(236,238,231,0.09);
+      --shadow:rgba(0,0,0,0.55);
+      --bezel:#05090F;
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#0D1622;
+    --paper-raised:#16222F;
+    --ink:#ECEEE7;
+    --ink-soft:#A8B3C0;
+    --ink-faint:#6E7C8C;
+    --stamp:#F6A622;
+    --stamp-ink:#F0C077;
+    --brass:#F6A622;
+    --brass-fill:#3A2D14;
+    --confirm:#5FA8B8;
+    --confirm-fill:#16333A;
+    --line:rgba(236,238,231,0.16);
+    --line-soft:rgba(236,238,231,0.09);
+    --shadow:rgba(0,0,0,0.55);
+    --bezel:#05090F;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Public Sans", system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  img{max-width:100%;}
+  [hidden]{display:none!important;}
+  button{font-family:inherit;}
+  ::selection{background:var(--brass-fill); color:var(--ink);}
+
+  .stage{
+    max-width:1100px;
+    margin:0 auto;
+    padding-inline:clamp(16px,4vw,48px);
+    padding-block:clamp(28px,5vw,56px);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:clamp(20px,3vw,32px);
+  }
+
+  .intro{
+    max-width:640px;
+    text-align:center;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .intro .eyebrow{
+    font-family:"JetBrains Mono", monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--stamp);
+    font-weight:700;
+  }
+  .intro h1{
+    font-family:"Fraunces", Georgia, serif;
+    font-weight:600;
+    font-size:clamp(28px,4vw,38px);
+    margin:0;
+    text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  .intro p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:15px;
+    line-height:1.55;
+    text-wrap:balance;
+  }
+
+  /* ---------- phone shell ---------- */
+  .phone-wrap{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:14px;
+  }
+  .phone{
+    width:390px;
+    max-width:100%;
+    background:var(--bezel);
+    border-radius:52px;
+    padding:14px;
+    box-shadow:0 30px 60px -20px var(--shadow), 0 2px 0 var(--line-soft) inset;
+  }
+  .screen{
+    position:relative;
+    height:760px;
+    max-height:80vh;
+    background:var(--paper);
+    border-radius:38px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    isolation:isolate;
+  }
+  .statusbar{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 26px 4px;
+    font-family:"JetBrains Mono", monospace;
+    font-size:12px;
+    font-weight:500;
+    color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+  .statusbar .glyphs{display:flex; gap:5px; align-items:center;}
+  .notch{
+    position:absolute;
+    top:8px; left:50%; transform:translateX(-50%);
+    width:100px; height:22px;
+    background:var(--bezel);
+    border-radius:14px;
+    z-index:5;
+  }
+
+  .appbar{
+    flex:0 0 auto;
+    padding:6px 20px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    border-bottom:1px solid var(--line);
+    background:var(--paper);
+  }
+  .wordmark{display:flex; flex-direction:column; gap:1px;}
+  .wordmark .name{
+    font-family:"Fraunces", Georgia, serif;
+    font-weight:600;
+    font-size:19px;
+    letter-spacing:-0.01em;
+    line-height:1;
+  }
+  .wordmark .org{
+    font-size:10px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    font-weight:600;
+  }
+  .mode-toggle{
+    display:flex;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:2px;
+    gap:2px;
+  }
+  .mode-toggle button{
+    border:none;
+    background:transparent;
+    color:var(--ink-soft);
+    font-size:11px;
+    font-weight:600;
+    padding:6px 11px;
+    border-radius:999px;
+    cursor:pointer;
+    letter-spacing:0.01em;
+  }
+  .mode-toggle button[aria-pressed="true"]{
+    background:var(--ink);
+    color:var(--paper);
+  }
+
+  .app-shell{
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* ---------- login ---------- */
+  .login-screen{
+    flex:1 1 auto;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .login-hero{
+    flex:0 0 auto;
+    position:relative;
+    overflow:hidden;
+    padding:34px 24px 44px;
+    background:linear-gradient(155deg, #17273C 0%, #1E4152 100%);
+  }
+  .login-hero::before{
+    content:"";
+    position:absolute; inset:0;
+    background:repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 26px);
+    pointer-events:none;
+  }
+  .login-wordmark{position:relative; text-align:center; color:#F5F1E4;}
+  .login-wordmark .name{
+    font-family:"Fraunces", Georgia, serif; font-weight:600; font-size:27px; letter-spacing:-0.01em;
+  }
+  .login-wordmark .org{
+    font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:#DDA53F;
+    font-weight:700; margin-top:6px;
+  }
+  .login-panel{
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    background:var(--paper);
+    border-radius:22px 22px 0 0;
+    margin-top:-22px;
+    padding:26px 22px 24px;
+    position:relative;
+    box-shadow:0 -10px 24px -18px var(--shadow);
+  }
+  .login-divider{
+    text-align:center; font-size:10.5px; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:0.06em; margin:18px 0 10px;
+  }
+  .login-note{font-size:11px; color:var(--ink-faint); text-align:center; margin-top:8px; line-height:1.5;}
+  .field-error{font-size:11.5px; color:var(--stamp-ink); margin:-6px 0 12px;}
+  .content{
+    flex:1 1 auto;
+    overflow-y:auto;
+    padding:16px 20px 12px;
+    scrollbar-width:thin;
+  }
+  .content::-webkit-scrollbar{width:6px;}
+  .content::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+
+  .tabbar{
+    flex:0 0 auto;
+    display:flex;
+    border-top:1px solid var(--line);
+    background:var(--paper-raised);
+    padding:8px 6px calc(10px + env(safe-area-inset-bottom,0px));
+  }
+  .tabbar button{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    border:none;
+    background:transparent;
+    color:var(--ink-faint);
+    font-size:10.5px;
+    font-weight:600;
+    letter-spacing:0.01em;
+    padding:6px 1px;
+    cursor:pointer;
+    border-radius:12px;
+    font-size:9.8px;
+  }
+  .tabbar button svg{width:18px; height:18px;}
+  .tabbar button[aria-selected="true"]{color:#00809D;}
+  .tabbar button[aria-selected="true"] .dot{opacity:1;}
+  .tabbar .dot{
+    width:4px; height:4px; border-radius:50%; background:#00809D; opacity:0; margin-top:-1px;
+  }
+
+  h2.screen-title{
+    font-family:"Fraunces", Georgia, serif;
+    font-weight:600;
+    font-size:21px;
+    margin:2px 0 14px;
+    letter-spacing:-0.01em;
+  }
+  .screen-title-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    margin:2px 0 14px;
+  }
+  .settings-btn{
+    width:32px; height:32px; flex:0 0 auto; border-radius:50%;
+    border:1px solid var(--line); background:var(--paper-raised); color:var(--ink-soft);
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .settings-btn:hover{color:var(--ink);}
+
+  .menu-list{display:flex; flex-direction:column;}
+  .menu-row{
+    display:flex; align-items:center; gap:12px; width:100%;
+    padding:13px 2px; border-bottom:1px solid var(--line-soft);
+    border-left:none; border-right:none; border-top:none; background:none;
+    cursor:pointer; text-align:left; font-family:inherit;
+  }
+  .menu-row:last-child{border-bottom:none;}
+  .menu-row .menu-icon{
+    flex:0 0 auto; width:34px; height:34px; border-radius:10px;
+    background:var(--brass-fill); color:var(--brass);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .menu-row .menu-text{flex:1; min-width:0;}
+  .menu-row .menu-text .name{font-weight:600; font-size:14px; color:var(--ink);}
+  .menu-row .menu-text .sub{font-size:11.5px; color:var(--ink-faint); margin-top:1px;}
+  .menu-row .chevron{flex:0 0 auto; color:var(--ink-faint);}
+
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--ink-faint); font-weight:700; margin-bottom:6px;
+  }
+  .field input, .field textarea, .field select{
+    width:100%; border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; font-family:inherit; font-size:13.5px;
+    background:var(--paper-raised); color:var(--ink); outline:none;
+  }
+  .field textarea{resize:vertical; min-height:64px; line-height:1.45;}
+  .field-row{display:flex; gap:10px; margin-bottom:14px;}
+  .field-row .field{flex:1; margin-bottom:0;}
+
+  .info-row{
+    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    padding:10px 0; border-bottom:1px solid var(--line-soft); font-size:13px;
+  }
+  .info-row:last-child{border-bottom:none;}
+  .info-row .k{color:var(--ink-faint);}
+  .info-row .v{font-weight:600; font-family:"JetBrains Mono", monospace; font-variant-numeric:tabular-nums;}
+
+  /* ---------- membership card ---------- */
+  /* Fixed-look component (a printed card), not re-themed with light/dark */
+  .card{
+    background:linear-gradient(155deg, #17273C 0%, #1E4152 100%);
+    color:#F5F1E4;
+    border-radius:18px;
+    padding:20px;
+    position:relative;
+    overflow:hidden;
+    box-shadow:0 14px 28px -14px var(--shadow);
+  }
+  .card::before{
+    content:"";
+    position:absolute; inset:0;
+    background:
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.05) 0 2px, transparent 2px 26px);
+    pointer-events:none;
+  }
+  .card .tier{
+    font-family:"JetBrains Mono", monospace;
+    font-size:10px;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    color:#DDA53F;
+    font-weight:700;
+  }
+  .card .biz{
+    font-family:"Fraunces", Georgia, serif;
+    font-size:24px;
+    font-weight:600;
+    margin:6px 0 2px;
+    letter-spacing:-0.01em;
+  }
+  .card .suburb{font-size:12px; opacity:0.75; margin-bottom:16px;}
+  .card .meta{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:12px;
+  }
+  .card .meta .row{display:flex; flex-direction:column; gap:2px;}
+  .card .meta .label{font-size:9px; text-transform:uppercase; letter-spacing:0.1em; opacity:0.6;}
+  .card .meta .value{font-family:"JetBrains Mono", monospace; font-size:12px; font-variant-numeric:tabular-nums;}
+  .qr{
+    width:56px; height:56px;
+    background:#F5F1E4;
+    border-radius:8px;
+    padding:5px;
+    flex:0 0 auto;
+  }
+  .qr svg{width:100%; height:100%; display:block;}
+  .card-hint{
+    text-align:center;
+    font-size:11.5px;
+    color:var(--ink-faint);
+    margin-top:12px;
+  }
+
+  .section-label{
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--ink-faint);
+    font-weight:700;
+    margin:22px 0 10px;
+  }
+  .section-label:first-child{margin-top:0;}
+
+  /* ---------- search ---------- */
+  .search{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:9px 12px;
+    margin-bottom:14px;
+  }
+  .search svg{flex:0 0 auto; color:var(--ink-faint);}
+  .search input{
+    border:none; background:transparent; outline:none;
+    font-family:inherit; font-size:14px; color:var(--ink); width:100%;
+  }
+  .search input::placeholder{color:var(--ink-faint);}
+
+  /* ---------- lists ---------- */
+  .biz-row{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    padding:12px 0;
+    border-bottom:1px solid var(--line-soft);
+  }
+  .biz-row:last-child{border-bottom:none;}
+  .biz-row-btn{
+    width:100%; text-align:left; background:none; cursor:pointer;
+    border-left:none; border-right:none; border-top:none; font-family:inherit; color:inherit;
+  }
+  .biz-row-btn .chevron{flex:0 0 auto; color:var(--ink-faint);}
+  .biz-avatar{
+    flex:0 0 auto;
+    width:38px; height:38px;
+    border-radius:10px;
+    background:var(--brass-fill);
+    color:var(--brass);
+    display:flex; align-items:center; justify-content:center;
+    font-family:"Fraunces", serif;
+    font-weight:600;
+    font-size:15px;
+  }
+  .biz-info{flex:1; min-width:0;}
+  .biz-info .name{font-weight:600; font-size:14.5px;}
+  .biz-info .sub{font-size:12px; color:var(--ink-faint); margin-top:1px;}
+  .tag{
+    display:inline-block;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:0.03em;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:2px 8px;
+    margin-top:6px;
+  }
+  .empty{
+    text-align:center;
+    color:var(--ink-faint);
+    font-size:13px;
+    padding:30px 10px;
+  }
+
+  /* ---------- offer cards ---------- */
+  .offer{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px;
+    margin-bottom:12px;
+  }
+  .offer-top{display:flex; justify-content:space-between; gap:10px; align-items:flex-start;}
+  .offer .biz-name{font-weight:600; font-size:13.5px;}
+  .offer .biz-cat{font-size:11px; color:var(--ink-faint); margin-top:1px;}
+  .offer .pitch{
+    font-family:"Fraunces", Georgia, serif;
+    font-size:16.5px;
+    font-weight:500;
+    margin:9px 0 12px;
+    line-height:1.32;
+    letter-spacing:-0.01em;
+  }
+  .offer-bottom{display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  .limit{font-size:10.5px; color:var(--ink-faint);}
+  .btn{
+    border:none;
+    border-radius:999px;
+    padding:8px 16px;
+    font-size:12.5px;
+    font-weight:700;
+    cursor:pointer;
+    letter-spacing:0.01em;
+    font-family:inherit;
+  }
+  .btn-primary{background:var(--stamp); color:#15212F;}
+  .btn-primary:active{transform:scale(0.97);}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--ink-soft);}
+  .btn-done{background:var(--confirm-fill); color:var(--confirm);}
+  .btn:disabled{opacity:0.55; cursor:default;}
+
+  /* ---------- redeem sheet ---------- */
+  .sheet-veil{
+    position:absolute; inset:0;
+    background:rgba(14,20,32,0.45);
+    display:flex; align-items:flex-end;
+    z-index:20;
+    backdrop-filter:blur(2px);
+  }
+  .sheet{
+    width:100%;
+    background:var(--paper);
+    border-radius:24px 24px 0 0;
+    padding:10px 22px calc(24px + env(safe-area-inset-bottom,0px));
+    box-shadow:0 -12px 30px -10px var(--shadow);
+  }
+  .sheet .grabber{
+    width:36px; height:4px; border-radius:2px; background:var(--line);
+    margin:6px auto 16px;
+  }
+  .sheet .biz-name{font-size:12.5px; color:var(--ink-faint); text-align:center;}
+  .sheet .pitch{
+    font-family:"Fraunces", serif;
+    font-size:18px; font-weight:500;
+    text-align:center;
+    margin:4px 0 18px;
+    letter-spacing:-0.01em;
+  }
+  .code-box{
+    background:var(--paper-raised);
+    border:1.5px dashed var(--line);
+    border-radius:16px;
+    padding:18px;
+    text-align:center;
+    position:relative;
+  }
+  .code{
+    font-family:"JetBrains Mono", monospace;
+    font-size:34px;
+    font-weight:700;
+    letter-spacing:0.12em;
+    font-variant-numeric:tabular-nums;
+  }
+  .code-caption{font-size:11px; color:var(--ink-faint); margin-top:6px;}
+  .timer{
+    font-family:"JetBrains Mono", monospace;
+    font-size:11px;
+    color:var(--stamp);
+    font-weight:700;
+    margin-top:4px;
+    font-variant-numeric:tabular-nums;
+  }
+  .qr-scan-wrap{
+    position:relative;
+    width:164px; height:164px;
+    margin:4px auto 14px;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px;
+    overflow:hidden;
+  }
+  .qr-pattern-box{width:100%; height:100%; transition:opacity 0.2s;}
+  .qr-pattern-box svg{width:100%; height:100%; display:block;}
+  .qr-pattern{fill:var(--ink);}
+  .qr-scan-wrap.scanning .qr-pattern-box{opacity:0.35;}
+  .corner{
+    position:absolute; width:20px; height:20px; border:2.5px solid var(--stamp);
+    opacity:0; transition:opacity 0.15s;
+  }
+  .corner.tl{top:6px; left:6px; border-right:none; border-bottom:none; border-radius:6px 0 0 0;}
+  .corner.tr{top:6px; right:6px; border-left:none; border-bottom:none; border-radius:0 6px 0 0;}
+  .corner.bl{bottom:6px; left:6px; border-right:none; border-top:none; border-radius:0 0 0 6px;}
+  .corner.br{bottom:6px; right:6px; border-left:none; border-top:none; border-radius:0 0 6px 0;}
+  .qr-scan-wrap.scanning .corner, .qr-scan-wrap.idle .corner{opacity:1;}
+  .scanner-placeholder{
+    width:100%; height:100%; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:8px; color:var(--ink-faint);
+  }
+  .scanner-placeholder span{font-size:11px; text-align:center; max-width:100px;}
+  .divider-label{
+    text-align:center; font-size:10.5px; color:var(--ink-faint);
+    text-transform:uppercase; letter-spacing:0.06em; margin:14px 0 8px;
+  }
+  .manual-code-row{display:flex; gap:8px; margin-bottom:4px;}
+  .manual-code-input{
+    flex:1; min-width:0; border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; font-family:"JetBrains Mono", monospace; font-size:13.5px;
+    letter-spacing:0.06em; background:var(--paper-raised); color:var(--ink); outline:none;
+  }
+  .manual-code-input::placeholder{font-family:"Public Sans", system-ui, sans-serif; letter-spacing:normal;}
+  .manual-code-row .btn{flex:0 0 auto;}
+  .qr-scan-line{
+    position:absolute; left:10px; right:10px; top:10px; height:2.5px;
+    background:var(--stamp); border-radius:2px; opacity:0;
+    box-shadow:0 0 8px var(--stamp);
+  }
+  .qr-scan-wrap.scanning .qr-scan-line{
+    opacity:1; animation:scanmove 1.1s ease-in-out infinite;
+  }
+  @keyframes scanmove{ 0%{ top:10px; } 50%{ top:calc(100% - 12px); } 100%{ top:10px; } }
+  .code-fallback{
+    text-align:center; font-size:11.5px; color:var(--ink-faint); margin-bottom:2px;
+  }
+  .code-fallback-value{
+    font-family:"JetBrains Mono", monospace; font-weight:700; color:var(--ink); letter-spacing:0.08em;
+  }
+  .stamp-mark{
+    position:absolute;
+    inset:0;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+  }
+  .stamp-mark span{
+    border:3px solid var(--stamp-ink);
+    color:var(--stamp-ink);
+    font-family:"JetBrains Mono", monospace;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.1em;
+    padding:6px 14px;
+    border-radius:8px;
+    transform:rotate(-9deg) scale(0);
+    opacity:0;
+    text-transform:uppercase;
+    animation:stampin 0.35s cubic-bezier(.2,1.6,.4,1) forwards;
+  }
+  @keyframes stampin{ to{ transform:rotate(-9deg) scale(1); opacity:1; } }
+  @media (prefers-reduced-motion: reduce){
+    .qr-scan-wrap.scanning .qr-scan-line{ animation:none; top:50%; }
+    .stamp-mark span{ animation:none; transform:rotate(-9deg) scale(1); opacity:1; }
+  }
+  .sheet-actions{display:flex; flex-direction:column; gap:8px; margin-top:16px;}
+  .sheet-actions .btn{width:100%; padding:12px;}
+  .staff-note{
+    font-size:10.5px; color:var(--ink-faint); text-align:center; margin-top:10px; line-height:1.5;
+  }
+
+  /* ---------- events ---------- */
+  .event{
+    display:flex; gap:12px;
+    border-bottom:1px solid var(--line-soft);
+    padding:13px 0;
+  }
+  .event:last-child{border-bottom:none;}
+  .event-date{
+    flex:0 0 auto; width:46px; text-align:center;
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:10px;
+    padding:6px 0; font-family:"JetBrains Mono", monospace;
+  }
+  .event-date .d{font-size:16px; font-weight:700; line-height:1;}
+  .event-date .m{font-size:9px; text-transform:uppercase; color:var(--ink-faint); margin-top:2px;}
+  .event-info{flex:1; min-width:0;}
+  .event-info .name{font-weight:600; font-size:14px;}
+  .event-info .where{font-size:12px; color:var(--ink-faint); margin-top:1px;}
+  .event-info .going{font-size:11px; color:var(--ink-faint); margin-top:6px;}
+  .rsvp{
+    flex:0 0 auto; align-self:center;
+    border:1px solid var(--line);
+    background:var(--paper-raised);
+    color:var(--ink);
+    border-radius:999px;
+    padding:6px 13px;
+    font-size:11.5px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .rsvp[aria-pressed="true"]{background:var(--confirm-fill); color:var(--confirm); border-color:transparent;}
+
+  .event-row{cursor:pointer;}
+
+  .photo-strip{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:14px 0 4px;}
+  .photo-tile{aspect-ratio:1; border-radius:10px;}
+  .photo-caption{font-size:10.5px; color:var(--ink-faint); text-align:center; margin-bottom:4px;}
+  .event-detail-meta{display:flex; flex-direction:column; gap:6px; margin:14px 0 16px;}
+  .event-detail-meta .row{display:flex; gap:8px; font-size:13px; color:var(--ink-soft);}
+  .event-detail-meta svg{flex:0 0 auto; margin-top:1px; color:var(--ink-faint);}
+  .event-detail-desc{font-size:13.5px; line-height:1.55; color:var(--ink-soft); margin-bottom:4px;}
+
+  .map-box{
+    position:relative;
+    height:120px;
+    border-radius:14px;
+    overflow:hidden;
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    margin:4px 0 4px;
+  }
+  .map-box svg{width:100%; height:100%; display:block;}
+  .map-bg{fill:var(--paper-raised);}
+  .map-road{stroke:var(--line); fill:none;}
+  .map-halo{fill:var(--stamp); opacity:0.16;}
+  .map-pin{fill:var(--stamp);}
+  .map-pin-dot{fill:var(--paper-raised);}
+  .map-caption{font-size:10.5px; color:var(--ink-faint); text-align:center; margin-bottom:16px;}
+  .contact-actions{display:flex; gap:8px; margin-top:4px; margin-bottom:16px;}
+  .contact-actions a.btn{flex:1; text-align:center; text-decoration:none; display:block;}
+  .rsvp-form{margin-top:6px;}
+  .rsvp-form label{
+    display:block; font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
+    color:var(--ink-faint); font-weight:700; margin-bottom:6px;
+  }
+  .rsvp-form select{
+    width:100%; border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px; font-family:inherit; font-size:13.5px;
+    background:var(--paper-raised); color:var(--ink);
+  }
+
+  /* ---------- member requests ---------- */
+  .compose{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:14px;
+    padding:12px 14px; margin-bottom:16px;
+  }
+  .compose textarea{
+    width:100%; border:none; background:transparent; resize:none;
+    font-family:inherit; font-size:13.5px; color:var(--ink); outline:none; min-height:40px;
+    line-height:1.4;
+  }
+  .compose textarea::placeholder{color:var(--ink-faint);}
+  .compose-row{display:flex; justify-content:space-between; align-items:center; margin-top:6px; gap:8px;}
+  .compose-hint{font-size:10.5px; color:var(--ink-faint);}
+
+  .request{
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:14px;
+    padding:14px; margin-bottom:12px;
+  }
+  .request-head{display:flex; gap:10px; align-items:center; margin-bottom:9px;}
+  .request-head .who{font-weight:600; font-size:13px;}
+  .request-head .when{font-size:11px; color:var(--ink-faint); margin-top:1px;}
+  .request-body{font-size:13.5px; line-height:1.5;}
+  .replies{margin-top:11px; padding-top:11px; border-top:1px solid var(--line-soft); display:flex; flex-direction:column; gap:9px;}
+  .reply{display:flex; gap:8px; align-items:flex-start;}
+  .reply-avatar{
+    flex:0 0 auto; width:26px; height:26px; border-radius:8px;
+    background:var(--confirm-fill); color:var(--confirm);
+    display:flex; align-items:center; justify-content:center;
+    font-family:"Fraunces", serif; font-weight:600; font-size:11px;
+  }
+  .reply-bubble{
+    flex:1; min-width:0; background:var(--paper); border:1px solid var(--line-soft);
+    border-radius:10px; padding:7px 10px;
+  }
+  .reply-bubble .who{font-weight:600; font-size:11.5px;}
+  .reply-bubble .body{font-size:12.5px; line-height:1.42; margin-top:1px;}
+  .reply-form{display:flex; gap:8px; margin-top:9px;}
+  .reply-form input{
+    flex:1; min-width:0; border:1px solid var(--line); border-radius:999px;
+    padding:7px 13px; font-size:12.5px; font-family:inherit; background:var(--paper); color:var(--ink); outline:none;
+  }
+  .reply-form input::placeholder{color:var(--ink-faint);}
+  .reply-send{
+    flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:none;
+    background:var(--stamp); color:#FDF7F1; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reply-send:disabled{opacity:0.4; cursor:default;}
+
+  /* ---------- admin ---------- */
+  .stat-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:22px;
+  }
+  .stat-tile{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:13px 14px;
+  }
+  .stat-tile .label{font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.06em; font-weight:600;}
+  .stat-tile .value{
+    font-family:"Fraunces", serif; font-weight:600; font-size:26px; margin-top:4px;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat-tile .delta{font-size:11px; margin-top:3px; font-weight:600;}
+  .delta.up{color:var(--confirm);}
+  .delta.flag{color:var(--stamp);}
+
+  .chart{margin-bottom:22px;}
+  .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:9px;}
+  .bar-row .bar-label{width:92px; flex:0 0 auto; font-size:11.5px; color:var(--ink-soft); text-align:right;}
+  .bar-track{flex:1; background:var(--line-soft); border-radius:5px; height:16px; position:relative; overflow:hidden;}
+  .bar-fill{
+    height:100%; background:var(--brass); border-radius:5px;
+    display:flex; align-items:center;
+  }
+  .bar-value{
+    width:30px; flex:0 0 auto; font-family:"JetBrains Mono", monospace; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--ink);
+  }
+
+  .approval{
+    display:flex; align-items:center; gap:10px;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px 12px;
+    margin-bottom:9px;
+    background:var(--paper-raised);
+  }
+  .approval .info{flex:1; min-width:0;}
+  .approval .name{font-weight:600; font-size:13px;}
+  .approval .sub{font-size:11px; color:var(--ink-faint);}
+  .approval-actions{display:flex; gap:6px; flex:0 0 auto;}
+  .icon-btn{
+    width:28px; height:28px; border-radius:50%; border:1px solid var(--line);
+    background:var(--paper); cursor:pointer; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-soft);
+  }
+  .icon-btn.approve:hover{background:var(--confirm-fill); color:var(--confirm); border-color:transparent;}
+  .icon-btn.decline:hover{background:var(--brass-fill); color:var(--stamp); border-color:transparent;}
+
+  .activity{display:flex; gap:10px; padding:9px 0; border-bottom:1px solid var(--line-soft);}
+  .activity:last-child{border-bottom:none;}
+  .activity .glyph{
+    flex:0 0 auto; width:26px; height:26px; border-radius:50%;
+    background:var(--confirm-fill); color:var(--confirm);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .activity .txt{font-size:12.5px; line-height:1.4;}
+  .activity .txt b{font-weight:600;}
+  .activity .time{font-size:10.5px; color:var(--ink-faint); margin-top:1px;}
+
+  .caption-row{
+    display:flex; justify-content:center; gap:6px; align-items:center;
+    font-size:12px; color:var(--ink-faint);
+  }
+  .caption-row .kbd{
+    font-family:"JetBrains Mono", monospace;
+    background:var(--paper-raised); border:1px solid var(--line);
+    border-radius:5px; padding:1px 6px; font-size:10.5px;
+  }
+
+  @media (max-width:480px){
+    .stage{padding-inline:0; padding-block:0; gap:0;}
+    .intro{display:none;}
+    .phone-wrap{gap:0;}
+    .phone{width:100%; border-radius:0; padding:0; box-shadow:none;}
+    .screen{height:100dvh; max-height:none; border-radius:0;}
+    .notch{display:none;}
+    .caption-row{display:none;}
+  }
+</style>
+
+<div class="stage">
+  <div class="intro">
+    <div class="eyebrow">Prototype — v0.1</div>
+    <h1>Chamber Perks</h1>
+    <p>A member-perks app built for local chambers of commerce. Businesses trade real discounts, chamber staff run it from one dashboard. Tap around — every screen works.</p>
+  </div>
+
+  <div class="phone-wrap">
+    <div class="phone">
+      <div class="screen" id="screen">
+        <div class="notch"></div>
+        <div class="statusbar">
+          <span id="clock">9:41</span>
+          <span class="glyphs">
+            <svg width="15" height="11" viewBox="0 0 15 11" fill="none"><rect x="0" y="7" width="2.4" height="4" rx="0.5" fill="currentColor"/><rect x="4" y="5" width="2.4" height="6" rx="0.5" fill="currentColor"/><rect x="8" y="2.5" width="2.4" height="8.5" rx="0.5" fill="currentColor"/><rect x="12" y="0" width="2.4" height="11" rx="0.5" fill="currentColor"/></svg>
+            <svg width="18" height="10" viewBox="0 0 18 10" fill="none"><rect x="0.5" y="0.5" width="15" height="9" rx="2" stroke="currentColor"/><rect x="2" y="2" width="11" height="6" rx="1" fill="currentColor"/><rect x="16" y="3" width="1.5" height="4" rx="0.5" fill="currentColor"/></svg>
+          </span>
+        </div>
+
+        <div class="login-screen" id="loginScreen">
+          <div class="login-hero">
+            <div class="login-wordmark">
+              <div class="name">Chamber Perks</div>
+              <div class="org">Pittwater Business</div>
+            </div>
+          </div>
+          <div class="login-panel">
+            <h2 class="screen-title" style="text-align:center;">Member sign in</h2>
+            <div class="field">
+              <label for="login-email">Email</label>
+              <input id="login-email" type="email" placeholder="you@business.com.au" value="hello@bodyworksphysio.com.au">
+            </div>
+            <div class="field">
+              <label for="login-pass">Password</label>
+              <input id="login-pass" type="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" value="demo">
+            </div>
+            <div class="field-error" id="login-error" hidden>Enter an email and password to continue.</div>
+            <button class="btn btn-primary" id="login-submit" style="width:100%;">Log In</button>
+            <button class="btn btn-ghost" id="login-forgot" style="width:100%; margin-top:8px;">Forgot password?</button>
+            <p class="login-note" id="login-forgot-note" hidden>A reset link would be emailed to you here &mdash; not wired up in this prototype.</p>
+            <div class="login-divider">New to the chamber?</div>
+            <button class="btn btn-ghost" id="login-apply" style="width:100%;">Apply for Membership</button>
+          </div>
+        </div>
+
+        <div class="app-shell" id="appShell" hidden>
+          <div class="appbar">
+            <div class="wordmark">
+              <span class="name">Chamber Perks</span>
+              <span class="org">Pittwater Business</span>
+            </div>
+            <div class="mode-toggle" role="group" aria-label="View">
+              <button id="mode-member" aria-pressed="true">Member</button>
+              <button id="mode-staff" aria-pressed="false">Staff</button>
+            </div>
+          </div>
+
+          <div class="content" id="content"></div>
+
+          <div class="tabbar" id="tabbar">
+            <button data-tab="card" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="12" rx="2.2"/><path d="M3 10h18"/></svg>
+              Card<span class="dot"></span>
+            </button>
+            <button data-tab="directory" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg>
+              Directory<span class="dot"></span>
+            </button>
+            <button data-tab="offers" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12l-8 8-9-9V4h7z"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"/></svg>
+              Offers<span class="dot"></span>
+            </button>
+            <button data-tab="events" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2.2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+              Events<span class="dot"></span>
+            </button>
+            <button data-tab="requests" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v12H8l-4 4V4z"/></svg>
+              Requests<span class="dot"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption-row">
+      <span>Try it —</span><span class="kbd">Offers → Redeem</span><span>or post to Requests</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var sb = window.supabase.createClient(
+    "https://avrmyjunqkjuwsvcbwfy.supabase.co",
+    "sb_publishable_YHPRWGou-Dr5u_hkNnsuYQ_AUEhACN9"
+  );
+  // Stand-in for "logged in as" until real Supabase Auth is wired up —
+  // testing as the Bodyworks Physio seed row.
+  var CURRENT_MEMBER_ID = "11111111-1111-1111-1111-111111111111";
+
+  // All of these load from Supabase at boot (see loadEverything below) —
+  // the arrays start empty and are populated by the loaders.
+  var BUSINESSES = [];
+  var EVENTS = [];
+  var REQUESTS = [];
+  var APPLICATIONS = [];
+  var REDEMPTIONS = [];
+
+  function limitLabel(l){
+    if(l === "quarter") return "1 per member / quarter";
+    if(l === "year") return "1 per member / year";
+    return "1 per member / month";
+  }
+
+  function timeAgo(iso){
+    var mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if(mins < 1) return "Just now";
+    if(mins < 60) return mins + " minute" + (mins===1?"":"s") + " ago";
+    var hrs = Math.round(mins/60);
+    if(hrs < 24) return hrs + " hour" + (hrs===1?"":"s") + " ago";
+    var days = Math.round(hrs/24);
+    if(days < 14) return days + " day" + (days===1?"":"s") + " ago";
+    return Math.round(days/7) + " week" + (Math.round(days/7)===1?"":"s") + " ago";
+  }
+
+  function fmtMonthYear(dateStr){
+    if(!dateStr) return "—";
+    return new Date(dateStr+"T00:00:00").toLocaleDateString("en-AU", {month:"short", year:"numeric"});
+  }
+  function fmtTime(d){
+    var h = d.getHours(), m = d.getMinutes();
+    var h12 = h % 12 || 12;
+    return h12 + (m ? ":" + (m<10?"0":"")+m : "") + (h>=12?"pm":"am");
+  }
+  function fmtEventTime(startIso, endIso){
+    var s = new Date(startIso);
+    var datePart = s.toLocaleDateString("en-AU", {weekday:"long", day:"numeric", month:"long"});
+    var out = datePart + ", " + fmtTime(s);
+    if(endIso) out += " – " + fmtTime(new Date(endIso));
+    return out;
+  }
+
+  async function loadBusinesses(){
+    var res = await sb.from("members").select("*, offers(*)").order("business_name");
+    if(res.error){ console.error("loadBusinesses", res.error); return; }
+    BUSINESSES = res.data.map(function(m){
+      var o = (m.offers && m.offers[0]) || {};
+      return {
+        id: m.id, name: m.business_name, cat: m.category, suburb: m.suburb,
+        initial: m.business_name.charAt(0), address: m.address, phone: m.phone,
+        email: m.email, bio: m.bio, memberNumber: m.member_number,
+        joinedAt: m.joined_at, renewsAt: m.renews_at,
+        offerId: o.id || null, offer: o.pitch || "",
+        rawLimit: o.redemption_limit || "month", limit: limitLabel(o.redemption_limit),
+        availability: o.availability || "always", seasonStart: o.season_start, seasonEnd: o.season_end
+      };
+    });
+  }
+
+  async function loadEvents(){
+    var evRes = await sb.from("events").select("*").order("starts_at");
+    if(evRes.error){ console.error("loadEvents", evRes.error); return; }
+    var rsvpRes = await sb.from("event_rsvps").select("event_id, member_id, party_size");
+    var byEvent = {};
+    (rsvpRes.data || []).forEach(function(r){
+      if(!byEvent[r.event_id]) byEvent[r.event_id] = {going:0, mine:0};
+      byEvent[r.event_id].going += r.party_size;
+      if(r.member_id === CURRENT_MEMBER_ID) byEvent[r.event_id].mine = r.party_size;
+    });
+    EVENTS = evRes.data.map(function(ev){
+      var d = new Date(ev.starts_at);
+      var rsvp = byEvent[ev.id] || {going:0, mine:0};
+      return {
+        id: ev.id, name: ev.name, where: ev.location,
+        d: String(d.getDate()).length<2 ? "0"+d.getDate() : String(d.getDate()),
+        m: d.toLocaleDateString("en-AU",{month:"short"}).toUpperCase(),
+        going: rsvp.going, myParty: rsvp.mine,
+        time: fmtEventTime(ev.starts_at, ev.ends_at), desc: ev.description || "",
+        photos: ["#C68A2E","#2F6B78","#17273C","#5FA8B8"]
+      };
+    });
+  }
+
+  async function loadRequests(){
+    var res = await sb.from("requests")
+      .select("id, body, created_at, members(business_name), request_replies(id, body, created_at, members(business_name))")
+      .order("created_at", {ascending:false});
+    if(res.error){ console.error("loadRequests", res.error); return; }
+    REQUESTS = res.data.map(function(r){
+      var authorName = r.members ? r.members.business_name : "Unknown";
+      return {
+        id: r.id, author: authorName, initial: authorName.charAt(0),
+        when: timeAgo(r.created_at), body: r.body,
+        replies: (r.request_replies || []).slice().sort(function(a,b){
+          return new Date(a.created_at) - new Date(b.created_at);
+        }).map(function(rp){
+          var rn = rp.members ? rp.members.business_name : "Unknown";
+          return {author:rn, initial:rn.charAt(0), when:timeAgo(rp.created_at), body:rp.body};
+        })
+      };
+    });
+  }
+
+  async function loadApplications(){
+    var res = await sb.from("applications").select("*").eq("status","pending").order("created_at");
+    if(res.error){ console.error("loadApplications", res.error); return; }
+    APPLICATIONS = res.data.map(function(a){
+      return {id:a.id, name:a.business_name, sub:"Postcode "+(a.postcode||"—")+" · applied "+timeAgo(a.created_at)};
+    });
+  }
+
+  async function loadRedemptions(){
+    var res = await sb.from("redemptions").select("*").order("created_at", {ascending:false});
+    if(res.error){ console.error("loadRedemptions", res.error); return; }
+    REDEMPTIONS = res.data || [];
+  }
+
+  function periodStart(limit){
+    var d = new Date();
+    if(limit === "quarter") d.setMonth(d.getMonth()-3);
+    else if(limit === "year") d.setFullYear(d.getFullYear()-1);
+    else d.setMonth(d.getMonth()-1);
+    return d;
+  }
+  function alreadyRedeemed(b){
+    var cutoff = periodStart(b.rawLimit);
+    return REDEMPTIONS.some(function(r){
+      return r.offer_id === b.offerId && r.redeeming_member_id === CURRENT_MEMBER_ID &&
+        r.status === "redeemed" && r.redeemed_at && new Date(r.redeemed_at) > cutoff;
+    });
+  }
+
+  async function loadEverything(){
+    await Promise.all([loadBusinesses(), loadApplications(), loadRedemptions()]);
+    await Promise.all([loadEvents(), loadRequests()]); // these read BUSINESSES-independent data but can run after
+  }
+
+  // state now only holds UI navigation prefs — all app data lives in
+  // Supabase and is loaded fresh via loadEverything() / the loaders above.
+  function defaultState(){
+    return {tab:"card", mode:"member"};
+  }
+  function loadState(){
+    try{
+      var raw = localStorage.getItem("chamber-perks-ui-state");
+      if(raw) return Object.assign(defaultState(), JSON.parse(raw));
+    }catch(e){}
+    return defaultState();
+  }
+  function saveState(){
+    try{ localStorage.setItem("chamber-perks-ui-state", JSON.stringify(state)); }catch(e){}
+  }
+
+  var state = loadState();
+
+  var contentEl = document.getElementById("content");
+  var tabbar = document.getElementById("tabbar");
+  var screenEl = document.getElementById("screen");
+  var loginScreen = document.getElementById("loginScreen");
+  var appShell = document.getElementById("appShell");
+
+  function esc(s){
+    return String(s).replace(/[&<>]/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c]; });
+  }
+
+  function myBusiness(){
+    return BUSINESSES.filter(function(b){ return b.id === CURRENT_MEMBER_ID; })[0];
+  }
+
+  function qrSvg(){
+    // decorative fixed pattern, not a real scannable code
+    var cells = [1,0,1,1,0,1,1,0, 0,1,0,0,1,0,1,1, 1,1,1,0,1,1,0,0, 0,0,1,1,0,0,1,1,
+                 1,0,0,1,1,1,0,1, 0,1,1,0,0,1,1,0, 1,1,0,1,1,0,0,1, 0,0,1,0,1,1,1,0];
+    var s = 8, rects = "";
+    for(var i=0;i<cells.length;i++){
+      if(cells[i]){
+        var x = (i % s), y = Math.floor(i / s);
+        rects += '<rect x="'+x+'" y="'+y+'" width="1" height="1"/>';
+      }
+    }
+    return '<svg viewBox="0 0 8 8" fill="currentColor" style="color:#17273C">'+rects+'</svg>';
+  }
+
+  function renderCard(){
+    var mine = myBusiness();
+    if(!mine){ contentEl.innerHTML = '<div class="empty">Could not load your membership — check the Supabase connection.</div>'; return; }
+    var redeemedCount = REDEMPTIONS.filter(function(r){ return r.redeeming_member_id === CURRENT_MEMBER_ID && r.status === "redeemed"; }).length;
+    var rsvpCount = EVENTS.filter(function(ev){ return ev.myParty > 0; }).length;
+    contentEl.innerHTML =
+      '<div class="screen-title-row">'+
+        '<h2 class="screen-title" style="margin:0;">Your membership</h2>'+
+        '<button class="settings-btn" id="open-account-menu" aria-label="Account menu">'+
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 01-4 0v-.09A1.7 1.7 0 008.5 19.4a1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.7 1.7 0 004.6 15a1.7 1.7 0 00-1.55-1H3a2 2 0 010-4h.09A1.7 1.7 0 004.6 9a1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06A1.7 1.7 0 008.5 4.6a1.7 1.7 0 001-1.55V3a2 2 0 014 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06A1.7 1.7 0 0019.4 9a1.7 1.7 0 001.55 1H21a2 2 0 010 4h-.09a1.7 1.7 0 00-1.51 1z"/></svg>'+
+        '</button>'+
+      '</div>'+
+      '<div class="card">'+
+        '<div class="tier">Full Member</div>'+
+        '<div class="biz">'+esc(mine.name)+'</div>'+
+        '<div class="suburb">'+esc(mine.suburb)+'</div>'+
+        '<div class="meta">'+
+          '<div class="row"><span class="label">Member ID</span><span class="value">'+esc(mine.memberNumber||"—")+'</span></div>'+
+          '<div class="row"><span class="label">Member since</span><span class="value">'+fmtMonthYear(mine.joinedAt)+'</span></div>'+
+          '<div class="row"><span class="label">Renews</span><span class="value">'+fmtMonthYear(mine.renewsAt)+'</span></div>'+
+          '<div class="qr">'+qrSvg()+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<p class="card-hint">Show this screen at the counter to confirm your membership</p>'+
+      '<div class="section-label">This month</div>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="label">Perks redeemed</div><div class="value">'+redeemedCount+'</div></div>'+
+        '<div class="stat-tile"><div class="label">Events RSVP\'d</div><div class="value">'+rsvpCount+'</div></div>'+
+      '</div>';
+
+    document.getElementById("open-account-menu").addEventListener("click", openAccountMenu);
+  }
+
+  function renderDirectory(query){
+    query = (query||"").toLowerCase().trim();
+    var list = BUSINESSES.filter(function(b){
+      return !query || b.name.toLowerCase().indexOf(query) > -1 || b.cat.toLowerCase().indexOf(query) > -1 || b.suburb.toLowerCase().indexOf(query) > -1;
+    });
+    var rows = list.map(function(b){
+      return '<button class="biz-row biz-row-btn" data-open-biz="'+b.id+'">'+
+        '<div class="biz-avatar">'+b.initial+'</div>'+
+        '<div class="biz-info">'+
+          '<div class="name">'+esc(b.name)+'</div>'+
+          '<div class="sub">'+esc(b.suburb)+'</div>'+
+          '<span class="tag">'+esc(b.cat)+'</span>'+
+        '</div>'+
+        '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+      '</button>';
+    }).join("") || '<div class="empty">No members match &ldquo;'+esc(query)+'&rdquo;</div>';
+
+    contentEl.innerHTML =
+      '<h2 class="screen-title">Directory</h2>'+
+      '<div class="search">'+
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4.3-4.3"/></svg>'+
+        '<input id="dir-search" type="text" placeholder="Search members, category, suburb" value="'+esc(query)+'">'+
+      '</div>'+
+      '<div class="section-label">'+list.length+' members</div>'+
+      rows;
+
+    var input = document.getElementById("dir-search");
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    input.addEventListener("input", function(){ renderDirectory(input.value); });
+
+    contentEl.querySelectorAll("[data-open-biz]").forEach(function(row){
+      row.addEventListener("click", function(){ openBusinessSheet(row.getAttribute("data-open-biz")); });
+    });
+  }
+
+  function fmtDate(dateStr){
+    var d = new Date(dateStr+"T00:00:00");
+    return d.getDate()+" "+d.toLocaleDateString("en-AU",{month:"short"});
+  }
+  function fmtRange(startStr, endStr){
+    var s = new Date(startStr+"T00:00:00"), e = new Date(endStr+"T00:00:00");
+    var sMonth = s.toLocaleDateString("en-AU",{month:"short"}), eMonth = e.toLocaleDateString("en-AU",{month:"short"});
+    return sMonth===eMonth
+      ? s.getDate()+"–"+e.getDate()+" "+eMonth
+      : s.getDate()+" "+sMonth+" – "+e.getDate()+" "+eMonth;
+  }
+
+  function offerStatus(b){
+    if(b.availability !== "seasonal" || !b.seasonStart || !b.seasonEnd){
+      return {active:true, seasonal:false};
+    }
+    var now = new Date();
+    var start = new Date(b.seasonStart+"T00:00:00");
+    var end = new Date(b.seasonEnd+"T23:59:59");
+    if(now < start) return {active:false, seasonal:true, label:"Available "+fmtRange(b.seasonStart, b.seasonEnd)};
+    if(now > end) return {active:false, seasonal:true, label:"Offer ended"};
+    return {active:true, seasonal:true, label:"Available until "+fmtDate(b.seasonEnd)};
+  }
+
+  function offerBadgeHtml(status){
+    return status.seasonal ? '<span class="tag" style="margin-left:6px;">Seasonal</span>' : "";
+  }
+
+  function offerActionHtml(b, status, done){
+    if(done) return '<button class="btn btn-done" disabled>Redeemed &#10003;</button>';
+    if(!status.active) return '<button class="btn btn-ghost" disabled>'+esc(status.label)+'</button>';
+    return '<button class="btn btn-primary" data-redeem="'+b.id+'">Redeem</button>';
+  }
+
+  function renderOffers(){
+    var rows = BUSINESSES.map(function(b){
+      var done = alreadyRedeemed(b);
+      var status = offerStatus(b);
+      return '<div class="offer">'+
+        '<div class="offer-top">'+
+          '<div><div class="biz-name">'+esc(b.name)+offerBadgeHtml(status)+'</div><div class="biz-cat">'+esc(b.cat)+' &middot; '+esc(b.suburb)+'</div></div>'+
+        '</div>'+
+        '<div class="pitch">'+esc(b.offer)+'</div>'+
+        '<div class="offer-bottom">'+
+          '<span class="limit">'+(status.seasonal && status.active ? esc(status.label) : esc(b.limit))+'</span>'+
+          offerActionHtml(b, status, done)+
+        '</div>'+
+      '</div>';
+    }).join("");
+
+    contentEl.innerHTML = '<h2 class="screen-title">Live offers</h2>' + rows;
+
+    contentEl.querySelectorAll("[data-redeem]").forEach(function(btn){
+      btn.addEventListener("click", function(){ openRedeemSheet(btn.getAttribute("data-redeem")); });
+    });
+  }
+
+  var PARTY_LABELS = ["Just me","Me + 1 guest","Me + 2 guests","Me + 3 guests","Me + 4 guests"];
+
+  function renderEvents(){
+    if(!EVENTS.length){ contentEl.innerHTML = '<h2 class="screen-title">Chamber events</h2><div class="empty">No events yet</div>'; return; }
+    var rows = EVENTS.map(function(ev){
+      var party = ev.myParty || 0;
+      var pressed = party > 0;
+      return '<div class="event event-row" data-open-event="'+ev.id+'">'+
+        '<div class="event-date"><div class="d">'+ev.d+'</div><div class="m">'+ev.m+'</div></div>'+
+        '<div class="event-info">'+
+          '<div class="name">'+esc(ev.name)+'</div>'+
+          '<div class="where">'+esc(ev.where)+'</div>'+
+          '<div class="going">'+ev.going+' member'+(ev.going===1?'':'s')+' going'+(pressed?' &middot; including you'+(party>1?' (party of '+party+')':''):'')+'</div>'+
+        '</div>'+
+        '<button class="rsvp" data-open-event="'+ev.id+'" aria-pressed="'+pressed+'">'+(pressed?"Going":"RSVP")+'</button>'+
+      '</div>';
+    }).join("");
+
+    contentEl.innerHTML = '<h2 class="screen-title">Chamber events</h2>' + rows;
+
+    contentEl.querySelectorAll("[data-open-event]").forEach(function(el){
+      el.addEventListener("click", function(e){
+        e.stopPropagation();
+        openEventSheet(el.getAttribute("data-open-event"));
+      });
+    });
+  }
+
+  function openEventSheet(eventId){
+    var ev = EVENTS.filter(function(x){ return x.id === eventId; })[0];
+    if(!ev) return;
+    var party = ev.myParty || 0;
+    var pressed = party > 0;
+    var going = ev.going;
+
+    var actionsHtml = pressed
+      ? '<p class="event-detail-desc" style="text-align:center;margin-bottom:2px;">You\'re going &mdash; '+PARTY_LABELS[party-1].toLowerCase()+'</p>'+
+        '<div class="sheet-actions">'+
+          '<button class="btn btn-ghost" id="cancel-rsvp">Cancel RSVP</button>'+
+          '<button class="btn btn-primary" id="close-sheet">Close</button>'+
+        '</div>'
+      : '<div class="rsvp-form">'+
+          '<label for="party-size">Who\'s coming?</label>'+
+          '<select id="party-size">'+
+            PARTY_LABELS.map(function(l,i){ return '<option value="'+(i+1)+'">'+l+'</option>'; }).join("")+
+          '</select>'+
+        '</div>'+
+        '<div class="sheet-actions">'+
+          '<button class="btn btn-primary" id="sheet-rsvp">Register &mdash; '+going+' going</button>'+
+          '<button class="btn btn-ghost" id="close-sheet">Close</button>'+
+        '</div>';
+
+    var veil = document.createElement("div");
+    veil.className = "sheet-veil";
+    veil.innerHTML =
+      '<div class="sheet">'+
+        '<div class="grabber"></div>'+
+        '<div class="pitch" style="margin-bottom:4px;">'+esc(ev.name)+'</div>'+
+        '<div class="event-detail-meta">'+
+          '<div class="row"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2.2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'+esc(ev.time)+'</div>'+
+          '<div class="row"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-7-6.2-7-11a7 7 0 1114 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>'+esc(ev.where)+'</div>'+
+        '</div>'+
+        '<p class="event-detail-desc">'+esc(ev.desc)+'</p>'+
+        '<div class="photo-strip">'+
+          ev.photos.map(function(c){ return '<div class="photo-tile" style="background:'+c+'"></div>'; }).join("")+
+        '</div>'+
+        '<div class="photo-caption">Sample photos — real event shots go here once live</div>'+
+        actionsHtml+
+      '</div>';
+    screenEl.appendChild(veil);
+
+    veil.querySelector("#close-sheet").addEventListener("click", function(){ veil.remove(); });
+
+    var rsvpBtn = veil.querySelector("#sheet-rsvp");
+    if(rsvpBtn){
+      rsvpBtn.addEventListener("click", async function(){
+        var size = parseInt(veil.querySelector("#party-size").value, 10);
+        rsvpBtn.disabled = true;
+        var res = await sb.from("event_rsvps").upsert(
+          {event_id: ev.id, member_id: CURRENT_MEMBER_ID, party_size: size},
+          {onConflict: "event_id,member_id"}
+        );
+        if(res.error){ console.error("rsvp upsert", res.error); rsvpBtn.disabled = false; return; }
+        await loadEvents();
+        veil.remove();
+        renderEvents();
+      });
+    }
+    var cancelBtn = veil.querySelector("#cancel-rsvp");
+    if(cancelBtn){
+      cancelBtn.addEventListener("click", async function(){
+        cancelBtn.disabled = true;
+        var res = await sb.from("event_rsvps").delete()
+          .eq("event_id", ev.id).eq("member_id", CURRENT_MEMBER_ID);
+        if(res.error){ console.error("rsvp delete", res.error); cancelBtn.disabled = false; return; }
+        await loadEvents();
+        veil.remove();
+        renderEvents();
+      });
+    }
+  }
+
+  function mapSvg(){
+    // stylized placeholder — not a live map
+    return '<svg viewBox="0 0 300 120" preserveAspectRatio="none">'+
+      '<rect class="map-bg" width="300" height="120"/>'+
+      '<path class="map-road" d="M0 88 C 60 70, 110 96, 170 78 S 260 60, 300 82" stroke-width="10"/>'+
+      '<path class="map-road" d="M40 0 L 64 120" stroke-width="8"/>'+
+      '<path class="map-road" d="M210 0 C 200 40, 230 70, 214 120" stroke-width="8"/>'+
+      '<circle class="map-halo" cx="150" cy="58" r="26"/>'+
+      '<path class="map-pin" d="M150 40c-9 0-16 7-16 16 0 12 16 26 16 26s16-14 16-26c0-9-7-16-16-16z"/>'+
+      '<circle class="map-pin-dot" cx="150" cy="56" r="5.5"/>'+
+      '</svg>';
+  }
+
+  function openBusinessSheet(bizId){
+    var b = BUSINESSES.filter(function(x){ return x.id === bizId; })[0];
+    if(!b) return;
+    var done = alreadyRedeemed(b);
+    var status = offerStatus(b);
+    var veil = openSheet(
+      '<div class="biz-name">'+esc(b.cat)+'</div>'+
+      '<div class="pitch" style="margin-bottom:12px;">'+esc(b.name)+'</div>'+
+      '<div class="map-box">'+mapSvg()+'</div>'+
+      '<div class="map-caption">'+esc(b.address)+' &mdash; illustrative map, wire up Google/Apple Maps once live</div>'+
+      '<div class="contact-actions">'+
+        '<a class="btn btn-primary" href="tel:'+esc(b.phone.replace(/[^\d+]/g,""))+'">Call</a>'+
+        '<a class="btn btn-ghost" href="mailto:'+esc(b.email)+'">Email</a>'+
+      '</div>'+
+      '<div class="info-row"><span class="k">Phone</span><span class="v">'+esc(b.phone)+'</span></div>'+
+      '<div class="info-row"><span class="k">Email</span><span class="v" style="font-size:11.5px;">'+esc(b.email)+'</span></div>'+
+      '<div class="section-label">Member offer'+offerBadgeHtml(status)+'</div>'+
+      '<div class="offer" style="margin-bottom:0;">'+
+        '<div class="pitch" style="text-align:left;font-size:15px;margin:0 0 10px;">'+esc(b.offer)+'</div>'+
+        '<div class="offer-bottom">'+
+          '<span class="limit">'+(status.seasonal && status.active ? esc(status.label) : esc(b.limit))+'</span>'+
+          (done ? '<button class="btn btn-done" disabled>Redeemed &#10003;</button>'
+            : !status.active ? '<button class="btn btn-ghost" disabled>'+esc(status.label)+'</button>'
+            : '<button class="btn btn-primary" id="open-redeem-from-biz">Redeem</button>')+
+        '</div>'+
+      '</div>'+
+      '<div class="sheet-actions"><button class="btn btn-ghost" data-close-sheet style="width:100%;">Close</button></div>'
+    );
+    var redeemBtn = veil.querySelector("#open-redeem-from-biz");
+    if(redeemBtn){
+      redeemBtn.addEventListener("click", function(){
+        veil.remove();
+        openRedeemSheet(b.id);
+      });
+    }
+  }
+
+  function renderRequests(){
+    var mine = myBusiness();
+    var rows = REQUESTS.map(function(r){
+      var repliesHtml = r.replies.map(function(rp){
+        return '<div class="reply">'+
+          '<div class="reply-avatar">'+esc(rp.initial)+'</div>'+
+          '<div class="reply-bubble"><div class="who">'+esc(rp.author)+'</div><div class="body">'+esc(rp.body)+'</div></div>'+
+        '</div>';
+      }).join("");
+
+      return '<div class="request">'+
+        '<div class="request-head">'+
+          '<div class="biz-avatar">'+esc(r.initial)+'</div>'+
+          '<div><div class="who">'+esc(r.author)+'</div><div class="when">'+esc(r.when)+'</div></div>'+
+        '</div>'+
+        '<div class="request-body">'+esc(r.body)+'</div>'+
+        '<div class="replies">'+
+          repliesHtml+
+          '<form class="reply-form" data-reply-to="'+r.id+'">'+
+            '<input type="text" placeholder="Reply as '+esc(mine?mine.name:"you")+'&hellip;" aria-label="Reply">'+
+            '<button class="reply-send" type="submit" aria-label="Send reply">'+
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 20l16-8L4 4v6l10 2-10 2v6z"/></svg>'+
+            '</button>'+
+          '</form>'+
+        '</div>'+
+      '</div>';
+    }).join("");
+
+    contentEl.innerHTML =
+      '<h2 class="screen-title">Member requests</h2>'+
+      '<div class="compose">'+
+        '<textarea id="new-request" placeholder="Ask a question, share an opportunity, or make a request&hellip;"></textarea>'+
+        '<div class="compose-row"><span class="compose-hint">Posts as '+esc(mine?mine.name:"you")+'</span><button class="btn btn-primary" id="post-request">Post</button></div>'+
+      '</div>'+
+      (rows || '<div class="empty">No requests yet — be the first to post one</div>');
+
+    document.getElementById("post-request").addEventListener("click", async function(){
+      var ta = document.getElementById("new-request");
+      var text = ta.value.trim();
+      if(!text) return;
+      var btn = document.getElementById("post-request");
+      btn.disabled = true;
+      var res = await sb.from("requests").insert({member_id: CURRENT_MEMBER_ID, body: text});
+      if(res.error){ console.error("post request", res.error); btn.disabled = false; return; }
+      await loadRequests();
+      renderRequests();
+    });
+
+    contentEl.querySelectorAll("[data-reply-to]").forEach(function(form){
+      form.addEventListener("submit", async function(e){
+        e.preventDefault();
+        var input = form.querySelector("input");
+        var text = input.value.trim();
+        if(!text) return;
+        var id = form.getAttribute("data-reply-to");
+        input.disabled = true;
+        var res = await sb.from("request_replies").insert({request_id: id, member_id: CURRENT_MEMBER_ID, body: text});
+        if(res.error){ console.error("post reply", res.error); input.disabled = false; return; }
+        await loadRequests();
+        renderRequests();
+      });
+    });
+  }
+
+  function hashCode(str){
+    var h = 0;
+    for(var i=0;i<str.length;i++){ h = (h*31 + str.charCodeAt(i)) >>> 0; }
+    return h || 1;
+  }
+  function mulberry32(seed){
+    return function(){
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function redeemQrSvg(seedStr){
+    var n = 15;
+    var rand = mulberry32(hashCode(seedStr));
+    var cells = [];
+    for(var y=0;y<n;y++){ cells.push([]); for(var x=0;x<n;x++){ cells[y].push(rand() > 0.55); } }
+    function stampFinder(ox,oy){
+      for(var y=0;y<7;y++){
+        for(var x=0;x<7;x++){
+          cells[oy+y][ox+x] = (x===0||x===6||y===0||y===6) || (x>=2&&x<=4&&y>=2&&y<=4);
+        }
+      }
+    }
+    stampFinder(0,0); stampFinder(n-7,0); stampFinder(0,n-7);
+    var rects = "";
+    for(var y=0;y<n;y++){
+      for(var x=0;x<n;x++){
+        if(cells[y][x]) rects += '<rect x="'+x+'" y="'+y+'" width="1" height="1"/>';
+      }
+    }
+    return '<svg viewBox="0 0 '+n+' '+n+'" class="qr-pattern">'+rects+'</svg>';
+  }
+
+  async function openRedeemSheet(bizId){
+    var b = BUSINESSES.filter(function(x){ return x.id === bizId; })[0];
+    if(!b || !b.offerId) return;
+    var code = String(Math.floor(100000 + Math.random()*900000));
+    var seconds = 90;
+    var expiresAt = new Date(Date.now() + seconds*1000).toISOString();
+
+    var insertRes = await sb.from("redemptions").insert({
+      offer_id: b.offerId, redeeming_member_id: CURRENT_MEMBER_ID,
+      token: code, status: "pending", expires_at: expiresAt
+    }).select().single();
+    if(insertRes.error){ console.error("create redemption", insertRes.error); return; }
+    var redemptionId = insertRes.data.id;
+
+    var veil = document.createElement("div");
+    veil.className = "sheet-veil";
+    veil.innerHTML =
+      '<div class="sheet">'+
+        '<div class="grabber"></div>'+
+        '<div class="biz-name">'+esc(b.name)+'</div>'+
+        '<div class="pitch">'+esc(b.offer)+'</div>'+
+        '<div class="qr-scan-wrap" id="qrscan">'+
+          '<div class="qr-pattern-box">'+redeemQrSvg(b.id+code)+'</div>'+
+          '<span class="corner tl"></span><span class="corner tr"></span>'+
+          '<span class="corner bl"></span><span class="corner br"></span>'+
+          '<div class="qr-scan-line"></div>'+
+        '</div>'+
+        '<div class="code-fallback">Can&rsquo;t scan? <span class="code-fallback-value">'+code.slice(0,3)+'&nbsp;'+code.slice(3)+'</span></div>'+
+        '<div class="timer" id="timer" style="text-align:center;">Expires in 1:30</div>'+
+        '<div class="sheet-actions">'+
+          '<button class="btn btn-primary" id="confirm-scan">Staff: Scan to confirm</button>'+
+          '<button class="btn btn-ghost" id="close-sheet">Cancel</button>'+
+        '</div>'+
+        '<p class="staff-note">In the live app, staff scan this with the in-app camera. Simulated here so you can see the full loop.</p>'+
+      '</div>';
+    screenEl.appendChild(veil);
+
+    var timerEl = veil.querySelector("#timer");
+    var interval = setInterval(async function(){
+      seconds--;
+      if(seconds <= 0){
+        clearInterval(interval);
+        veil.remove();
+        await sb.from("redemptions").update({status:"expired"}).eq("id", redemptionId).eq("status","pending");
+        await loadRedemptions();
+        return;
+      }
+      var m = Math.floor(seconds/60), s = seconds%60;
+      timerEl.textContent = "Expires in " + m + ":" + (s<10?"0":"") + s;
+    }, 1000);
+
+    veil.querySelector("#close-sheet").addEventListener("click", async function(){
+      clearInterval(interval);
+      veil.remove();
+      await sb.from("redemptions").update({status:"cancelled"}).eq("id", redemptionId).eq("status","pending");
+    });
+
+    veil.querySelector("#confirm-scan").addEventListener("click", function(){
+      var btn = veil.querySelector("#confirm-scan");
+      if(btn.disabled) return;
+      btn.disabled = true;
+      btn.textContent = "Scanning…";
+      var wrap = veil.querySelector("#qrscan");
+      wrap.classList.add("scanning");
+
+      setTimeout(async function(){
+        clearInterval(interval);
+        var updateRes = await sb.from("redemptions").update({
+          status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_by_member_id: b.id
+        }).eq("id", redemptionId);
+        if(updateRes.error){ console.error("confirm redemption", updateRes.error); btn.disabled = false; btn.textContent = "Staff: Scan to confirm"; return; }
+        wrap.classList.remove("scanning");
+        var stamp = document.createElement("div");
+        stamp.className = "stamp-mark";
+        stamp.innerHTML = '<span>Redeemed</span>';
+        wrap.appendChild(stamp);
+        btn.textContent = "Confirmed";
+        await loadRedemptions();
+        setTimeout(function(){
+          veil.remove();
+          if(state.tab === "offers") renderOffers();
+          if(state.mode === "staff") renderStaff();
+        }, 900);
+      }, 1150);
+    });
+  }
+
+  function openSheet(bodyHtml){
+    var veil = document.createElement("div");
+    veil.className = "sheet-veil";
+    veil.innerHTML = '<div class="sheet"><div class="grabber"></div>'+bodyHtml+'</div>';
+    screenEl.appendChild(veil);
+    veil.querySelectorAll("[data-close-sheet]").forEach(function(btn){
+      btn.addEventListener("click", function(){ veil.remove(); });
+    });
+    return veil;
+  }
+
+  function openAccountMenu(){
+    var veil = openSheet(
+      '<div class="pitch" style="margin-bottom:6px;">Account</div>'+
+      '<div class="menu-list">'+
+        '<button class="menu-row" data-menu="profile">'+
+          '<div class="menu-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c1.5-4 4.2-6 7-6s5.5 2 7 6"/></svg></div>'+
+          '<div class="menu-text"><div class="name">Profile</div><div class="sub">Business name, suburb, bio</div></div>'+
+          '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+        '</button>'+
+        '<button class="menu-row" data-menu="promo">'+
+          '<div class="menu-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12l-8 8-9-9V4h7z"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"/></svg></div>'+
+          '<div class="menu-text"><div class="name">Manage My Promo</div><div class="sub">Edit your offer and limit</div></div>'+
+          '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+        '</button>'+
+        '<button class="menu-row" data-menu="accept">'+
+          '<div class="menu-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.4"/></svg></div>'+
+          '<div class="menu-text"><div class="name">Accept Redemptions</div><div class="sub">Scan a member&rsquo;s QR at the counter</div></div>'+
+          '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+        '</button>'+
+        '<button class="menu-row" data-menu="membership">'+
+          '<div class="menu-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="6" width="18" height="12" rx="2.2"/><path d="M3 10h18"/></svg></div>'+
+          '<div class="menu-text"><div class="name">Membership Management</div><div class="sub">Tier, billing, renewal</div></div>'+
+          '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+        '</button>'+
+      '</div>'+
+      '<div class="section-label">More</div>'+
+      '<div class="menu-list">'+
+        '<button class="menu-row" data-menu="logoff">'+
+          '<div class="menu-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></div>'+
+          '<div class="menu-text"><div class="name">Log Off</div><div class="sub">Sign out of this account</div></div>'+
+          '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+        '</button>'+
+        '<button class="menu-row" data-menu="deleteapp">'+
+          '<div class="menu-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v13a1 1 0 01-1 1H8a1 1 0 01-1-1V7h10z"/><path d="M10 11v6M14 11v6"/></svg></div>'+
+          '<div class="menu-text"><div class="name">Delete This App</div><div class="sub">Remove from your home screen</div></div>'+
+          '<svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+        '</button>'+
+      '</div>'+
+      '<div class="sheet-actions"><button class="btn btn-ghost" data-close-sheet style="width:100%;">Close</button></div>'
+    );
+    veil.querySelectorAll("[data-menu]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        veil.remove();
+        var which = btn.getAttribute("data-menu");
+        if(which === "profile") openEditProfileSheet();
+        if(which === "promo") openManagePromoSheet();
+        if(which === "accept") openAcceptRedemptionSheet();
+        if(which === "membership") openMembershipManagementSheet();
+        if(which === "logoff") logOff();
+        if(which === "deleteapp") openDeleteAppSheet();
+      });
+    });
+  }
+
+  function logOff(){
+    document.querySelectorAll(".sheet-veil").forEach(function(v){ v.remove(); });
+    appShell.hidden = true;
+    loginScreen.hidden = false;
+    document.getElementById("login-pass").value = "";
+  }
+
+  function openDeleteAppSheet(){
+    openSheet(
+      '<div class="pitch" style="margin-bottom:14px;">Delete this app</div>'+
+      '<p class="event-detail-desc">This isn&rsquo;t something the app can do to itself &mdash; removing it works the same way as any other app on your phone:</p>'+
+      '<div class="info-row"><span class="k">iPhone</span><span class="v" style="font-family:inherit;font-weight:600;font-size:12.5px;">Press &amp; hold icon &rarr; Remove App</span></div>'+
+      '<div class="info-row"><span class="k">Android</span><span class="v" style="font-family:inherit;font-weight:600;font-size:12.5px;">Press &amp; hold icon &rarr; Uninstall</span></div>'+
+      '<p class="staff-note">Your chamber membership itself isn&rsquo;t deleted &mdash; you can reinstall and log back in any time.</p>'+
+      '<div class="sheet-actions"><button class="btn btn-primary" data-close-sheet style="width:100%;">Got it</button></div>'
+    );
+  }
+
+  function openEditProfileSheet(){
+    var p = myBusiness();
+    if(!p) return;
+    var veil = openSheet(
+      '<div class="pitch" style="margin-bottom:14px;">Edit profile</div>'+
+      '<div class="field"><label for="f-name">Business name</label><input id="f-name" type="text" value="'+esc(p.name)+'"></div>'+
+      '<div class="field"><label for="f-suburb">Suburb</label><input id="f-suburb" type="text" value="'+esc(p.suburb)+'"></div>'+
+      '<div class="field"><label for="f-bio">Bio</label><textarea id="f-bio">'+esc(p.bio||"")+'</textarea></div>'+
+      '<div class="sheet-actions">'+
+        '<button class="btn btn-primary" id="save-profile">Save</button>'+
+        '<button class="btn btn-ghost" data-close-sheet>Cancel</button>'+
+      '</div>'
+    );
+    veil.querySelector("#save-profile").addEventListener("click", async function(){
+      var btn = veil.querySelector("#save-profile");
+      btn.disabled = true;
+      var res = await sb.from("members").update({
+        business_name: veil.querySelector("#f-name").value.trim() || p.name,
+        suburb: veil.querySelector("#f-suburb").value.trim() || p.suburb,
+        bio: veil.querySelector("#f-bio").value.trim()
+      }).eq("id", CURRENT_MEMBER_ID);
+      if(res.error){ console.error("save profile", res.error); btn.disabled = false; return; }
+      await loadBusinesses();
+      veil.remove();
+      if(RENDER[state.tab]) RENDER[state.tab]();
+    });
+  }
+
+  function openManagePromoSheet(){
+    var biz = myBusiness();
+    if(!biz) return;
+    var LIMIT_OPTIONS = [["month","1 per member / month"],["quarter","1 per member / quarter"],["year","1 per member / year"]];
+    var isSeasonal = biz.availability === "seasonal";
+    var veil = openSheet(
+      '<div class="pitch" style="margin-bottom:14px;">Manage my promo</div>'+
+      '<div class="field"><label for="f-offer">Offer</label><textarea id="f-offer">'+esc(biz.offer)+'</textarea></div>'+
+      '<div class="field"><label for="f-limit">Redemption limit</label><select id="f-limit">'+
+        LIMIT_OPTIONS.map(function(l){ return '<option value="'+l[0]+'"'+(l[0]===biz.rawLimit?' selected':'')+'>'+l[1]+'</option>'; }).join("")+
+      '</select></div>'+
+      '<div class="field"><label for="f-availability">Availability</label><select id="f-availability">'+
+        '<option value="always"'+(!isSeasonal?' selected':'')+'>Always on</option>'+
+        '<option value="seasonal"'+(isSeasonal?' selected':'')+'>Seasonal window (e.g. summer, Christmas)</option>'+
+      '</select></div>'+
+      '<div class="field-row" id="season-dates"'+(isSeasonal?'':' hidden')+'>'+
+        '<div class="field"><label for="f-season-start">From</label><input type="date" id="f-season-start" value="'+esc(biz.seasonStart||"")+'"></div>'+
+        '<div class="field"><label for="f-season-end">To</label><input type="date" id="f-season-end" value="'+esc(biz.seasonEnd||"")+'"></div>'+
+      '</div>'+
+      '<div class="sheet-actions">'+
+        '<button class="btn btn-primary" id="save-promo">Save</button>'+
+        '<button class="btn btn-ghost" data-close-sheet>Cancel</button>'+
+      '</div>'
+    );
+
+    var availSelect = veil.querySelector("#f-availability");
+    var seasonDates = veil.querySelector("#season-dates");
+    availSelect.addEventListener("change", function(){
+      seasonDates.hidden = availSelect.value !== "seasonal";
+    });
+
+    veil.querySelector("#save-promo").addEventListener("click", async function(){
+      var btn = veil.querySelector("#save-promo");
+      btn.disabled = true;
+      var availability = availSelect.value;
+      var seasonStart = veil.querySelector("#f-season-start").value;
+      var seasonEnd = veil.querySelector("#f-season-end").value;
+      var res = await sb.from("offers").update({
+        pitch: veil.querySelector("#f-offer").value.trim() || biz.offer,
+        redemption_limit: veil.querySelector("#f-limit").value,
+        availability: availability,
+        season_start: availability === "seasonal" && seasonStart ? seasonStart : null,
+        season_end: availability === "seasonal" && seasonEnd ? seasonEnd : null
+      }).eq("id", biz.offerId);
+      if(res.error){ console.error("save promo", res.error); btn.disabled = false; return; }
+      await loadBusinesses();
+      veil.remove();
+      if(RENDER[state.tab]) RENDER[state.tab]();
+    });
+  }
+
+  async function findPendingRedemption(biz, token){
+    var q = sb.from("redemptions").select("*")
+      .eq("offer_id", biz.offerId).eq("status", "pending")
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", {ascending:true}).limit(1);
+    if(token) q = q.eq("token", token);
+    var res = await q;
+    if(res.error){ console.error("find redemption", res.error); return null; }
+    return (res.data && res.data[0]) || null;
+  }
+
+  function openAcceptRedemptionSheet(){
+    var biz = myBusiness();
+    if(!biz) return;
+    var veil = openSheet(
+      '<div class="pitch" style="margin-bottom:4px;">Accept a redemption</div>'+
+      '<div class="biz-name" style="margin-bottom:14px;">Scanning for: '+esc(biz.offer)+'</div>'+
+      '<div class="qr-scan-wrap idle" id="scanner">'+
+        '<div class="scanner-placeholder">'+
+          '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v9a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13" r="3.4"/></svg>'+
+          '<span>Point camera at member&rsquo;s QR</span>'+
+        '</div>'+
+        '<span class="corner tl"></span><span class="corner tr"></span>'+
+        '<span class="corner bl"></span><span class="corner br"></span>'+
+        '<div class="qr-scan-line"></div>'+
+      '</div>'+
+      '<div class="sheet-actions">'+
+        '<button class="btn btn-primary" id="simulate-scan">Check for a redemption</button>'+
+        '<button class="btn btn-ghost" data-close-sheet>Close</button>'+
+      '</div>'+
+      '<div class="divider-label">Or if the camera can&rsquo;t read it</div>'+
+      '<div class="manual-code-row">'+
+        '<input type="text" id="manual-code" class="manual-code-input" placeholder="Enter their code" inputmode="numeric" maxlength="8">'+
+        '<button class="btn btn-primary" id="manual-confirm">Confirm</button>'+
+      '</div>'+
+      '<p class="staff-note">In the live app this opens the device camera automatically — here it looks up a real pending redemption for your offer.</p>'
+    );
+
+    var btn = veil.querySelector("#simulate-scan");
+    var scanner = veil.querySelector("#scanner");
+    var manualInput = veil.querySelector("#manual-code");
+    var manualBtn = veil.querySelector("#manual-confirm");
+
+    function lockControls(){
+      btn.disabled = true;
+      manualBtn.disabled = true;
+      manualInput.disabled = true;
+    }
+
+    btn.addEventListener("click", function(){
+      if(btn.disabled) return;
+      lockControls();
+      btn.textContent = "Scanning…";
+      scanner.classList.remove("idle");
+      scanner.classList.add("scanning");
+      setTimeout(async function(){
+        var redemption = await findPendingRedemption(biz, null);
+        renderRedemptionMatch(veil, biz, redemption);
+      }, 1100);
+    });
+
+    manualBtn.addEventListener("click", async function(){
+      if(manualBtn.disabled || !manualInput.value.trim()) return;
+      lockControls();
+      var redemption = await findPendingRedemption(biz, manualInput.value.trim());
+      renderRedemptionMatch(veil, biz, redemption);
+    });
+    manualInput.addEventListener("keydown", function(e){
+      if(e.key === "Enter") manualBtn.click();
+    });
+  }
+
+  function renderRedemptionMatch(veil, biz, redemption){
+    var sheet = veil.querySelector(".sheet");
+    if(!redemption){
+      sheet.innerHTML =
+        '<div class="grabber"></div>'+
+        '<div class="pitch" style="margin-bottom:4px;">No pending redemption found</div>'+
+        '<p class="event-detail-desc" style="text-align:center;">Ask the member to tap Redeem on your offer first, then try again.</p>'+
+        '<div class="sheet-actions"><button class="btn btn-primary" data-close-sheet style="width:100%;">Close</button></div>';
+      sheet.querySelectorAll("[data-close-sheet]").forEach(function(b){ b.addEventListener("click", function(){ veil.remove(); }); });
+      return;
+    }
+    var member = BUSINESSES.filter(function(b){ return b.id === redemption.redeeming_member_id; })[0];
+    var memberName = member ? member.name : "Unknown member";
+    sheet.innerHTML =
+      '<div class="grabber"></div>'+
+      '<div class="pitch" style="margin-bottom:4px;">Match found</div>'+
+      '<div class="biz-name" style="margin-bottom:14px;">Scanned member QR</div>'+
+      '<div class="request" id="match-card" style="margin-bottom:0;">'+
+        '<div class="request-head">'+
+          '<div class="biz-avatar">'+esc(memberName.charAt(0))+'</div>'+
+          '<div><div class="who">'+esc(memberName)+'</div><div class="when">Full member</div></div>'+
+        '</div>'+
+        '<div class="request-body">Wants to redeem: <strong>'+esc(biz.offer)+'</strong></div>'+
+      '</div>'+
+      '<div class="sheet-actions" style="margin-top:16px;">'+
+        '<button class="btn btn-primary" id="confirm-accept">Confirm redemption</button>'+
+        '<button class="btn btn-ghost" id="decline-accept">Decline</button>'+
+      '</div>';
+
+    veil.querySelector("#decline-accept").addEventListener("click", function(){ veil.remove(); });
+    veil.querySelector("#confirm-accept").addEventListener("click", async function(){
+      var confirmBtn = veil.querySelector("#confirm-accept");
+      confirmBtn.disabled = true;
+      var res = await sb.from("redemptions").update({
+        status: "redeemed", redeemed_at: new Date().toISOString(), redeemed_by_member_id: biz.id
+      }).eq("id", redemption.id).eq("status", "pending");
+      if(res.error){ console.error("accept redemption", res.error); confirmBtn.disabled = false; return; }
+
+      var card = veil.querySelector("#match-card");
+      card.style.position = "relative";
+      var stamp = document.createElement("div");
+      stamp.className = "stamp-mark";
+      stamp.innerHTML = '<span>Redeemed</span>';
+      card.appendChild(stamp);
+      confirmBtn.textContent = "Confirmed";
+      veil.querySelector("#decline-accept").hidden = true;
+
+      await loadRedemptions();
+      setTimeout(function(){
+        veil.remove();
+        if(state.mode === "staff") renderStaff();
+      }, 900);
+    });
+  }
+
+  function openMembershipManagementSheet(){
+    var mine = myBusiness() || {};
+    openSheet(
+      '<div class="pitch" style="margin-bottom:14px;">Membership management</div>'+
+      '<div class="info-row"><span class="k">Tier</span><span class="v">Full Member</span></div>'+
+      '<div class="info-row"><span class="k">Member ID</span><span class="v">'+esc(mine.memberNumber||"—")+'</span></div>'+
+      '<div class="info-row"><span class="k">Member since</span><span class="v">'+fmtMonthYear(mine.joinedAt)+'</span></div>'+
+      '<div class="info-row"><span class="k">Renews</span><span class="v">'+fmtMonthYear(mine.renewsAt)+'</span></div>'+
+      '<div class="sheet-actions" style="margin-top:16px;">'+
+        '<button class="btn btn-ghost" style="width:100%;">Change tier</button>'+
+        '<button class="btn btn-ghost" style="width:100%;">Update payment method</button>'+
+        '<button class="btn btn-primary" data-close-sheet style="width:100%;">Close</button>'+
+      '</div>'+
+      '<p class="staff-note">Billing and tier changes aren&rsquo;t wired up in this prototype &mdash; shown to scope what a real build needs.</p>'
+    );
+  }
+
+  function redeemedRows(){
+    return REDEMPTIONS.filter(function(r){ return r.status === "redeemed"; });
+  }
+
+  function chartBars(){
+    var byCategory = {};
+    redeemedRows().forEach(function(r){
+      var offeringBiz = BUSINESSES.filter(function(b){ return b.offerId === r.offer_id; })[0];
+      var cat = offeringBiz ? offeringBiz.cat : "Other";
+      byCategory[cat] = (byCategory[cat] || 0) + 1;
+    });
+    var cats = Object.keys(byCategory).map(function(c){ return {cat:c, n:byCategory[c]}; })
+      .sort(function(a,b){ return b.n - a.n; });
+    if(!cats.length) return '<div class="empty">No redemptions yet</div>';
+    var max = Math.max.apply(null, cats.map(function(c){ return c.n; }));
+    return cats.map(function(c){
+      var pct = Math.round((c.n/max)*100);
+      return '<div class="bar-row">'+
+        '<span class="bar-label">'+esc(c.cat)+'</span>'+
+        '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div>'+
+        '<span class="bar-value">'+c.n+'</span>'+
+      '</div>';
+    }).join("");
+  }
+
+  function renderStaff(){
+    var approvalsHtml = APPLICATIONS.length
+      ? APPLICATIONS.map(function(a){
+          return '<div class="approval">'+
+            '<div class="info"><div class="name">'+esc(a.name)+'</div><div class="sub">'+esc(a.sub)+'</div></div>'+
+            '<div class="approval-actions">'+
+              '<button class="icon-btn decline" data-decline="'+a.id+'" aria-label="Decline">'+
+                '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg></button>'+
+              '<button class="icon-btn approve" data-approve="'+a.id+'" aria-label="Approve">'+
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 12l5 5L20 6"/></svg></button>'+
+            '</div>'+
+          '</div>';
+        }).join("")
+      : '<div class="empty">No pending applications</div>';
+
+    var recent = redeemedRows().slice().sort(function(a,b){
+      return new Date(b.redeemed_at) - new Date(a.redeemed_at);
+    }).slice(0, 8);
+    var activityHtml = recent.length ? recent.map(function(r){
+      var redeemer = BUSINESSES.filter(function(b){ return b.id === r.redeeming_member_id; })[0];
+      var offeringBiz = BUSINESSES.filter(function(b){ return b.offerId === r.offer_id; })[0];
+      var who = redeemer ? redeemer.name : "A member";
+      var where = offeringBiz ? offeringBiz.name : "a member business";
+      return '<div class="activity">'+
+        '<div class="glyph"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M4 12l5 5L20 6"/></svg></div>'+
+        '<div><div class="txt"><b>'+esc(who)+'</b> redeemed at '+esc(where)+'</div><div class="time">'+timeAgo(r.redeemed_at)+'</div></div>'+
+      '</div>';
+    }).join("") : '<div class="empty">No redemptions yet</div>';
+
+    var liveOffers = BUSINESSES.filter(function(b){ return b.offer; }).length;
+
+    contentEl.innerHTML =
+      '<h2 class="screen-title">Chamber overview</h2>'+
+      '<div class="stat-grid">'+
+        '<div class="stat-tile"><div class="label">Active members</div><div class="value">'+BUSINESSES.length+'</div></div>'+
+        '<div class="stat-tile"><div class="label">Live offers</div><div class="value">'+liveOffers+'</div></div>'+
+        '<div class="stat-tile"><div class="label">Redemptions</div><div class="value">'+recent.length+'</div></div>'+
+        '<div class="stat-tile"><div class="label">Pending review</div><div class="value">'+APPLICATIONS.length+'</div>'+(APPLICATIONS.length?'<div class="delta flag">needs action</div>':'<div class="delta up">all clear</div>')+'</div>'+
+      '</div>'+
+      '<div class="section-label">Redemptions by category</div>'+
+      '<div class="chart">'+chartBars()+'</div>'+
+      '<div class="section-label">Pending applications</div>'+
+      approvalsHtml+
+      '<div class="section-label">Recent activity</div>'+
+      activityHtml;
+
+    contentEl.querySelectorAll("[data-approve]").forEach(function(btn){
+      btn.addEventListener("click", async function(){
+        btn.disabled = true;
+        var res = await sb.from("applications").update({status:"approved", reviewed_at:new Date().toISOString()})
+          .eq("id", btn.getAttribute("data-approve"));
+        if(res.error){ console.error("approve application", res.error); btn.disabled = false; return; }
+        await loadApplications();
+        renderStaff();
+      });
+    });
+    contentEl.querySelectorAll("[data-decline]").forEach(function(btn){
+      btn.addEventListener("click", async function(){
+        btn.disabled = true;
+        var res = await sb.from("applications").update({status:"declined", reviewed_at:new Date().toISOString()})
+          .eq("id", btn.getAttribute("data-decline"));
+        if(res.error){ console.error("decline application", res.error); btn.disabled = false; return; }
+        await loadApplications();
+        renderStaff();
+      });
+    });
+  }
+
+  var RENDER = {card:renderCard, directory:function(){renderDirectory("");}, offers:renderOffers, events:renderEvents, requests:renderRequests};
+
+  function selectTab(tab){
+    state.tab = tab; saveState();
+    tabbar.querySelectorAll("button").forEach(function(btn){
+      btn.setAttribute("aria-selected", String(btn.getAttribute("data-tab") === tab));
+    });
+    RENDER[tab]();
+  }
+
+  function setMode(mode){
+    state.mode = mode; saveState();
+    document.getElementById("mode-member").setAttribute("aria-pressed", String(mode==="member"));
+    document.getElementById("mode-staff").setAttribute("aria-pressed", String(mode==="staff"));
+    tabbar.hidden = mode === "staff";
+    if(mode === "staff") renderStaff();
+    else selectTab(state.tab && RENDER[state.tab] ? state.tab : "card");
+  }
+
+  tabbar.addEventListener("click", function(e){
+    var btn = e.target.closest("button[data-tab]");
+    if(btn) selectTab(btn.getAttribute("data-tab"));
+  });
+  document.getElementById("mode-member").addEventListener("click", function(){ setMode("member"); });
+  document.getElementById("mode-staff").addEventListener("click", function(){ setMode("staff"); });
+
+  function openApplySheet(){
+    var veil = openSheet(
+      '<div class="pitch" style="margin-bottom:14px;">Apply for membership</div>'+
+      '<div class="field"><label for="apply-name">Business name</label><input id="apply-name" type="text" placeholder="Your business name"></div>'+
+      '<div class="field"><label for="apply-email">Email</label><input id="apply-email" type="email" placeholder="you@business.com.au"></div>'+
+      '<div class="field"><label for="apply-postcode">Postcode</label><input id="apply-postcode" type="text" inputmode="numeric" maxlength="4" placeholder="e.g. 2103"></div>'+
+      '<div class="sheet-actions">'+
+        '<button class="btn btn-primary" id="apply-submit">Submit application</button>'+
+        '<button class="btn btn-ghost" data-close-sheet>Cancel</button>'+
+      '</div>'
+    );
+    veil.querySelector("#apply-submit").addEventListener("click", async function(){
+      var name = veil.querySelector("#apply-name").value.trim();
+      if(!name) return;
+      var email = veil.querySelector("#apply-email").value.trim();
+      var postcode = veil.querySelector("#apply-postcode").value.trim();
+      var submitBtn = veil.querySelector("#apply-submit");
+      submitBtn.disabled = true;
+      var res = await sb.from("applications").insert({business_name:name, email:email, postcode:postcode, status:"pending"});
+      if(res.error){ console.error("submit application", res.error); submitBtn.disabled = false; return; }
+      veil.querySelector(".sheet").innerHTML =
+        '<div class="grabber"></div>'+
+        '<div class="pitch" style="margin-bottom:8px;">Application received</div>'+
+        '<p class="event-detail-desc" style="text-align:center;">A chamber admin will review &ldquo;'+esc(name)+'&rdquo; shortly.</p>'+
+        '<div class="sheet-actions"><button class="btn btn-primary" data-close-sheet style="width:100%;">Done</button></div>';
+      veil.querySelectorAll("[data-close-sheet]").forEach(function(closeBtn){
+        closeBtn.addEventListener("click", function(){ veil.remove(); });
+      });
+    });
+  }
+
+  document.getElementById("login-submit").addEventListener("click", async function(){
+    var email = document.getElementById("login-email").value.trim();
+    var pass = document.getElementById("login-pass").value.trim();
+    var err = document.getElementById("login-error");
+    if(!email || !pass){ err.hidden = false; return; }
+    err.hidden = true;
+    var submitBtn = document.getElementById("login-submit");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Loading…";
+    await loadEverything();
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Log In";
+    loginScreen.hidden = true;
+    appShell.hidden = false;
+    setMode(state.mode === "staff" ? "staff" : "member");
+  });
+  document.getElementById("login-forgot").addEventListener("click", function(){
+    document.getElementById("login-forgot-note").hidden = false;
+  });
+  document.getElementById("login-apply").addEventListener("click", openApplySheet);
+
+  function tick(){
+    var d = new Date();
+    var h = d.getHours() % 12 || 12;
+    var m = d.getMinutes();
+    document.getElementById("clock").textContent = h + ":" + (m<10?"0":"") + m;
+  }
+  tick();
+  setInterval(tick, 15000);
+})();
+</script>
